@@ -16,6 +16,9 @@
 //       POST /registry/services/:id/disputes   a buyer disputes a paid call (anchored on HCS)
 //       GET  /registry/receipts?service=&buyer=
 //       POST /registry/reputation/anchor       snapshot every score to HCS
+//   - backs the UI (loopback only):
+//       POST /deploy/check · /deploy/publish · GET/DELETE /deploy/published   (Deployer)
+//       POST /playground/quote · /playground/pay · /playground/a2a            (User playground)
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createConnection } from "node:net";
@@ -176,28 +179,66 @@ function json(res: ServerResponse, code: number, body: unknown) {
 // A real x402 client with the buyer's limits. Online it signs as BUYER_* (or
 // the operator). Offline it uses a throwaway key registered with the mock
 // facilitator, so signatures are still genuinely checked.
+type Creds = { accountId: string; privateKey: import("@hiero-ledger/sdk").PrivateKey };
+let credsP: Promise<Creds | null> | null = null;
+/** The wallet every in-hub buyer (test buyer, streaming demo, playground)
+ *  signs with: BUYER_* (or HEDERA_*) from .env. Offline, whatever account we
+ *  sign as has to exist on the mock ledger, or its signatures verify against
+ *  nothing, so it is registered there (a throwaway key if .env has none). */
+function creds() {
+  credsP ??= (async (): Promise<Creds | null> => {
+    const { PrivateKey } = await import("@hiero-ledger/sdk");
+    const { parseHederaKey } = await import("./hedera.ts");
+    const id = process.env.BUYER_ACCOUNT_ID || process.env.HEDERA_ACCOUNT_ID;
+    const raw = process.env.BUYER_PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY;
+    let c: Creds | null = id && raw ? { accountId: id, privateKey: parseHederaKey(raw) } : null;
+    if (!OFFLINE || !process.env.FACILITATOR_URL) return c;
+    c ??= { accountId: process.env.OFFLINE_BUYER_ID ?? "0.0.5001", privateKey: PrivateKey.generateECDSA() };
+    await fetch(`${process.env.FACILITATOR_URL}/accounts`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accountId: c.accountId, publicKey: c.privateKey.publicKey.toStringDer(), balance: String(100n * 100_000_000n) }),
+    }).catch(() => {});
+    return c;
+  })().catch((e) => { credsP = null; throw e; });
+  return credsP;
+}
+
 let buyerP: Promise<import("./paid-fetch.ts").MeteredBuyer | null> | null = null;
 function buyer() {
   buyerP ??= (async () => {
-    const { buyerFromEnv, createMeteredBuyer } = await import("./paid-fetch.ts");
-    let b = buyerFromEnv();
-    if (b && !OFFLINE) return b;
-    if (!OFFLINE || !process.env.FACILITATOR_URL) return b;
-    // Offline: whatever account we sign as (from .env or a throwaway) has to
-    // exist on the mock ledger, or its signatures verify against nothing.
-    if (!b) {
-      const { PrivateKey } = await import("@hiero-ledger/sdk");
-      const key = PrivateKey.generateECDSA();
-      b = createMeteredBuyer({ accountId: process.env.OFFLINE_BUYER_ID ?? "0.0.5001", privateKey: key });
-    }
-    await fetch(`${process.env.FACILITATOR_URL}/accounts`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ accountId: b.accountId, publicKey: b.publicKeyDer, balance: String(100n * 100_000_000n) }),
-    }).catch(() => {});
-    return b;
+    const c = await creds();
+    if (!c) return null;
+    const { createMeteredBuyer } = await import("./paid-fetch.ts");
+    return createMeteredBuyer({ accountId: c.accountId, privateKey: c.privateKey, maxPerCall: process.env.BUYER_MAX_PER_CALL, budget: process.env.BUYER_BUDGET });
   })().catch((e) => { buyerP = null; throw e; });
   return buyerP;
 }
+
+// ── the playground's buyer: the SDK, so humans see the same lifecycle agents get
+const SELF = `http://127.0.0.1:${HUB_PORT}`;
+const pendingQuotes = new Map<string, import("./sdk/buyer.ts").PendingQuote>();
+async function sdkBuyer() {
+  const c = await creds();
+  if (!c) return null;
+  const { MeterX402 } = await import("./sdk/buyer.ts");
+  return new MeterX402({ wallet: c, registry: SELF, autoDispute: true });
+}
+
+// ── services the Deployer view published from the UI (run in this process)
+const published = new Map<string, { url: string; startedAt: number; close(): Promise<void> }>();
+async function freePort(from = 4150): Promise<number> {
+  for (let p = from; p < from + 200; p++) if (!(await portAlive(p, 150)) && ![...published.values()].some((x) => x.url.endsWith(`:${p}`))) return p;
+  throw new Error("no free port");
+}
+const probeReq = (b: any) => ({
+  upstream: String(b.url ?? ""),
+  sample: b.sample || "/",
+  method: String(b.method || (b.body ? "POST" : "GET")).toUpperCase(),
+  body: b.body || undefined,
+  headers: b.headers ?? {},
+  query: b.query ?? {},
+});
+const trim = (x: unknown) => (typeof x === "string" ? x.slice(0, 20000) : JSON.stringify(x ?? null).length > 20000 ? JSON.stringify(x).slice(0, 20000) + "…" : x);
 
 // One tab per lane for the dashboard's streaming demo. Opening a tab approves a
 // real HBAR allowance, so it is done once and reused until it is exhausted.
@@ -249,6 +290,115 @@ const server = createServer(async (req, res) => {
       for (const c of checks) if (!c.alive) lanes.delete(c.name);
       return json(res, 200, { lanes: checks.filter((c) => c.alive).map((c) => ({ ...c.l, policy: policies.get(c.name) ?? {} })) });
     }
+    // ── Deployer: dry-run and publish from the UI (loopback only) ────────
+    if (url.pathname.startsWith("/deploy/") || url.pathname.startsWith("/playground/")) {
+      if (!isLocal(req)) return json(res, 403, { ok: false, error: "the deployer and playground APIs are loopback-only" });
+    }
+    if (req.method === "POST" && url.pathname === "/deploy/check") {
+      const b = await readBody(req);
+      const { detect, probe: probeOnce, variants, priceOf, detectFrom } = await import("./detect.ts");
+      const { inferType, inferAuth, inferCapabilities } = await import("./protocol/describe.ts");
+      const r = probeReq(b);
+      if (!/^https?:\/\//.test(r.upstream)) return json(res, 400, { ok: false, error: "url must start with http(s)://" });
+      const { probe: pr, detection } = await detect(r);
+      if ("error" in detection) return json(res, 200, { ok: false, status: pr.status, error: detection.error, needsAuth: pr.status === 401 || pr.status === 403 });
+      const card = { rate: detection.rate, per: detection.per, min: detection.min };
+      const rows = [{ label: "this call", units: detection.measured, price: priceOf(detection.measured, card) }];
+      for (const v of variants(r)) {
+        const p2 = await probeOnce(v.req);
+        if (!p2.ok) continue;
+        const d2 = detectFrom(p2, v.req.body ? JSON.parse(v.req.body) : undefined);
+        if (!("error" in d2)) rows.push({ label: v.label, units: d2.measured, price: priceOf(d2.measured, card) });
+      }
+      const type = inferType(detection.unit, r.body);
+      return json(res, 200, {
+        ok: true, status: pr.status, ms: Math.round(pr.ms), bytes: pr.bytes, detection, type,
+        auth: inferAuth(r.headers, r.query), capabilities: inferCapabilities(r.upstream, type, r.sample),
+        variants: rows, flat: { units: detection.maxUnits, price: priceOf(detection.maxUnits, card) },
+      });
+    }
+    if (req.method === "POST" && url.pathname === "/deploy/publish") {
+      const b = await readBody(req);
+      const r = probeReq(b);
+      const wallet = String(b.wallet || process.env.WALLET || "");
+      if (!/^https?:\/\//.test(r.upstream)) return json(res, 400, { ok: false, error: "url must start with http(s)://" });
+      if (!wallet) return json(res, 400, { ok: false, error: "a payout wallet is required (or set WALLET in .env)" });
+      try {
+        const { wrap } = await import("./sdk/seller.ts");
+        const port = Number(b.port) || await freePort();
+        let tab: any;
+        const spender = process.env.TAB_SPENDER_ID || process.env.HEDERA_ACCOUNT_ID;
+        const spenderKey = process.env.TAB_SPENDER_KEY || process.env.HEDERA_PRIVATE_KEY;
+        if (b.tab && spender && spenderKey) tab = { spenderId: spender, spenderKey, mockLedgerUrl: OFFLINE ? process.env.FACILITATOR_URL : undefined };
+        const svc = await wrap({
+          upstream: r.upstream, wallet, sample: r.sample, method: r.method, body: r.body, headers: r.headers, query: r.query,
+          meter: b.meter || undefined, rate: b.rate || undefined, per: b.per ? Number(b.per) : undefined, maxUnits: b.maxUnits ? Number(b.maxUnits) : undefined,
+          name: b.name || undefined, capabilities: Array.isArray(b.capabilities) && b.capabilities.length ? b.capabilities : undefined,
+          description: b.description || undefined, port, registry: SELF, facilitator: process.env.FACILITATOR_URL, quiet: true, tab,
+        });
+        published.set(svc.descriptor.service_id, { url: svc.url, startedAt: Date.now(), close: svc.close });
+        return json(res, 200, { ok: true, descriptor: svc.descriptor, detected: svc.detected, tabs: !!tab });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    if (url.pathname === "/deploy/published" && req.method === "GET") {
+      return json(res, 200, { services: [...published].map(([id, p]) => ({ service_id: id, url: p.url, startedAt: p.startedAt })) });
+    }
+    if (url.pathname.startsWith("/deploy/published/") && req.method === "DELETE") {
+      const id = decodeURIComponent(url.pathname.slice("/deploy/published/".length));
+      const p = published.get(id);
+      if (!p) return json(res, 404, { ok: false, error: "not published from this hub" });
+      await p.close();
+      published.delete(id);
+      await probeAll();
+      return json(res, 200, { ok: true });
+    }
+
+    // ── Playground: the lifecycle one step at a time, as a human ─────────
+    if (req.method === "POST" && url.pathname === "/playground/quote") {
+      const b = await readBody(req);
+      const mx = await sdkBuyer().catch(() => null);
+      if (!mx) return json(res, 200, { ok: false, error: "no buyer wallet: set BUYER_ACCOUNT_ID/BUYER_PRIVATE_KEY in .env" });
+      try {
+        const q = await mx.quote(String(b.service_id), { path: b.path || undefined, method: b.method || undefined, body: b.body || undefined, query: b.query || undefined, maxUnits: b.maxUnits ? Number(b.maxUnits) : undefined });
+        if (!("pay" in q)) return json(res, 200, { ok: true, free: true, result: { ...q, data: trim(q.data), text: undefined } });
+        pendingQuotes.set(q.quote.quote_id, q);
+        setTimeout(() => pendingQuotes.delete(q.quote.quote_id), Math.max(0, q.quote.expires_at - Date.now()) + 1000).unref?.();
+        return json(res, 200, { ok: true, quote: q.quote, route: q.route, buyer: mx.accountId });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    if (req.method === "POST" && url.pathname === "/playground/pay") {
+      const b = await readBody(req);
+      const q = pendingQuotes.get(String(b.quote_id));
+      if (!q) return json(res, 200, { ok: false, error: "unknown or expired quote: get a new one" });
+      if (b.maxPrice && Number(q.quote.amount) > Number(b.maxPrice)) return json(res, 200, { ok: false, refused: true, error: `quote ${q.quote.amount} ${q.quote.currency} is above your max price ${b.maxPrice}` });
+      try {
+        const r = await q.pay();
+        pendingQuotes.delete(String(b.quote_id));
+        return json(res, 200, { ok: r.ok, result: { status: r.status, paid: r.paid, data: trim(r.data), receipt: r.receipt, authorization: r.authorization, verification: r.verification, dispute: r.dispute } });
+      } catch (e) {
+        return json(res, 200, { ok: false, refused: (e as Error)?.name === "BudgetError", error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    if (req.method === "POST" && url.pathname === "/playground/a2a") {
+      const b = await readBody(req);
+      const c = await creds().catch(() => null);
+      if (!c) return json(res, 200, { ok: false, error: "no buyer wallet configured" });
+      const entry = registry.get(String(b.service_id));
+      if (!entry) return json(res, 404, { ok: false, error: "no such service" });
+      try {
+        const { MeterX402Agent } = await import("./sdk/agent.ts");
+        const agent = new MeterX402Agent({ wallet: c, registry: SELF });
+        const r = await agent.a2a(entry.descriptor.endpoint, b.data ?? String(b.text ?? ""), { maxUnits: b.maxUnits ? Number(b.maxUnits) : undefined, maxPrice: b.maxPrice || undefined });
+        return json(res, 200, { ok: true, task: { ...r.task, artifacts: r.task.artifacts?.map((a) => ({ ...a, parts: a.parts.map((p: any) => (p.kind === "data" ? { ...p, data: trim(p.data) } : p)) })) }, quote: r.quote, receipt: r.receipt, paid: r.paid });
+      } catch (e) {
+        return json(res, 200, { ok: false, refused: (e as Error)?.name === "BudgetError", error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+
     // ── registry ────────────────────────────────────────────────────────
     if (url.pathname === "/registry/services" && req.method === "GET") {
       const q = url.searchParams;

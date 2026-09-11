@@ -43,6 +43,9 @@ export interface LaneSpec {
   rpm?: number;
   /** Offer Metered Tabs on this lane (needs a spender account; see .env). */
   tab?: boolean;
+  /** How the service describes itself in the registry and marketplace. */
+  description?: string;
+  capabilities?: string[];
   tabFlush?: number | string;
 }
 
@@ -95,6 +98,8 @@ export function laneArgs(lane: LaneSpec, wallet: string, tabsPossible = false): 
     args.push("--tab");
     if (lane.tabFlush != null) args.push("--tab-flush", String(lane.tabFlush));
   }
+  if (lane.description) args.push("--description", lane.description);
+  for (const c of lane.capabilities ?? []) args.push("--capability", c);
   if (lane.body != null) { const b = s(lane.body); if (b == null) return null; args.push("--body", b); }
   for (const [k, v] of Object.entries(lane.headers ?? {})) { const val = s(v); if (val == null) return null; args.push("--header", `${k}: ${val}`); }
   for (const [k, v] of Object.entries(lane.query ?? {})) { const val = s(v); if (val == null) return null; args.push("--query", `${k}=${val}`); }

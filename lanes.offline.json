@@ -14,7 +14,11 @@
       "sample": "/v1/chat/completions",
       "method": "POST",
       "body": "{\"model\":\"mock-1\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain x402 metered payments in 40 words\"}]}",
-      "tab": true
+      "tab": true,
+      "description": "Mock LLM (offline). Pay per token used; streams on a tab.",
+      "capabilities": [
+        "text_generation"
+      ]
     },
     {
       "name": "pools",
@@ -26,7 +30,11 @@
       "port": 4098,
       "method": "POST",
       "body": "{\"query\":\"{ pools(first: 5) { id totalValueLockedUSD } }\"}",
-      "tab": true
+      "tab": true,
+      "description": "Mock GraphQL pools API (offline). Priced per pool returned.",
+      "capabilities": [
+        "onchain_analytics"
+      ]
     },
     {
       "name": "blob",
@@ -35,7 +43,11 @@
       "rate": 0.001,
       "per": 1000,
       "port": 4096,
-      "sample": "/blob?kb=8"
+      "sample": "/blob?kb=8",
+      "description": "Mock data blobs (offline). Priced per KB returned.",
+      "capabilities": [
+        "file_download"
+      ]
     },
     {
       "name": "price-flat",
@@ -43,7 +55,11 @@
       "meter": "request",
       "rate": 0.01,
       "port": 4094,
-      "sample": "/price"
+      "sample": "/price",
+      "description": "Mock ETH price (offline). One flat price per call, like classic x402.",
+      "capabilities": [
+        "market_data"
+      ]
     }
   ]
 }

@@ -48,9 +48,25 @@ automated tests pass**.
 | `mx402 inspect`, `mx402 wallet new` | ✅ |
 | Meter auto-detection, including nested lists (`rows:hourly.time`) | ✅ |
 | npm package `mx402`: bundled SDK + CLI, zero dependencies, ~4s install | ✅ built, **not published** |
-| Dashboard: income, price spread, lanes, test buyer, streaming demo, registry + reputation, payments, analytics | ✅ |
+| Dashboard: income, price spread, lanes, test buyer, streaming demo, registry + reputation, payments, analytics | ✅ (now the Deployer view) |
 | Offline demo (mock upstream + signature-checking mock facilitator) | ✅ `npm run demo:offline` |
 | Live demo against real APIs (Groq, Open-Meteo, Etherscan, CoinGecko) | ✅ `npm run demo` |
+
+### Web UI (hub at `http://127.0.0.1:4021`)
+| Area | What it does | Status |
+|---|---|---|
+| **User / Deployer switch** | Two modes, like ChatGPT's Chat / Work. Remembered per browser; deep links `#user`, `#user/playground`, `#deployer` | ✅ |
+| **User → Marketplace** | Service cards: description, live dot, price per unit, typical call, reputation score, interfaces (REST · A2A · MCP · SDK · STREAMING · TABS). Search, capability chips, sort (best / cheapest / reputation / fastest), "rated only" | ✅ |
+| **For AI agents** | A collapsible panel with the machine paths to the same data: registry `curl`, MCP config (`npx -y mx402 mcp`), SDK `discover()`, A2A agent card | ✅ |
+| **Service drawer** | *Overview* (descriptor, reputation breakdown by component, recent receipts), *Try it* (the full lifecycle, step by step: discover → quote → budget check → pay / don't pay with a hold countdown → verify → receipt; streaming on tab lanes), *Integrate* | ✅ live-settled on testnet |
+| **User → Playground** | Pick a service and an integration: Buyer SDK, Agent SDK, MCP connector (Claude Code / `.mcp.json` / Claude Desktop / prompt), A2A, raw HTTP + x402, CLI. Code is generated from the live descriptor, and **Run** performs the same call with real settlement | ✅ |
+| **Deployer → Publish an API** | URL + sample + auth → *Check* (free dry run: type, meter, suggested rate, price variants vs flat) → *Publish* (starts a payment endpoint in the hub, registers it). Shows the equivalent `npx mx402 publish` command | ✅ live (CoinGecko) |
+| **Deployer → dashboard** | The existing income / charges / lanes / registry / payments / analytics views, with per-lane stream and test buyer | ✅ |
+
+UI endpoints on the hub (loopback only): `POST /deploy/check`, `POST /deploy/publish`,
+`GET /deploy/published`, `DELETE /deploy/published/:id`, `POST /playground/quote`,
+`POST /playground/pay`, `POST /playground/a2a`. The playground signs with the hub's buyer account
+from `.env` (or a mock account offline). It is a demo wallet, not the visitor's.
 
 ### Tests
 | Suite | Count |
@@ -67,8 +83,8 @@ In rough priority order.
 
 | # | Item | Why it matters | Notes |
 |---|---|---|---|
-| 1 | **UI: User / Deployer modes, agent marketplace, playground** | humans need to find and try services; deployers need a home | in progress (next) |
-| 2 | Publish the npm package | `npx mx402` for everyone | needs `npm login`; the LICENSE and repo URL are now in place |
+| 1 | Publish the npm package | `npx mx402` for everyone; the UI's MCP and CLI snippets assume it | needs `npm login`; the LICENSE and repo URL are in place |
+| 2 | Visitor wallets in the UI | today the playground pays from the hub's demo buyer | HashPack / WalletConnect signing in the browser |
 | 3 | Hosted deployment (a public hub + gateways) | today everything is `localhost` | Dockerfile / Railway template, `--public-url` |
 | 4 | USDC pricing on Hedera (HTS token) | budgets in a stable currency | the adapter supports assets; needs a funded USDC test account |
 | 5 | Live test of the EVM / Solana adapters | multi-chain is declared, not proven | needs `@x402/evm` / `@x402/svm` and funded wallets |
@@ -110,6 +126,11 @@ In rough priority order.
   streaming or push notifications.
 - **Upstream 4xx errors are passed through free** and do not count against reputation, which a
   seller could in theory abuse to hide failures.
+- **Services published from the dashboard run inside the hub process.** They stop when the hub
+  stops and show as down in the marketplace until republished. Use `mx402 publish` for a
+  long-lived gateway.
+- **The UI is a local tool.** Its deploy and playground endpoints only answer on loopback, and it
+  has no accounts. Anyone at the machine can publish and spend the demo buyer's testnet HBAR.
 - **Windows / Git Bash** rewrites `--sample /path` into a Windows path. The CLI detects and undoes
   this, but `MSYS_NO_PATHCONV=1` avoids it.
 
@@ -127,6 +148,8 @@ In rough priority order.
 - A tab's `close()` can return `lastTx: null` when the 15s timer already settled everything; the
   `paid` total is still correct. The fix is to return the last flush's transaction.
 - The dashboard's "Units sold" shows "mixed" across units by design, and only sums per API.
+- After a hub restart, gateways that were already running re-register on their next heartbeat
+  (up to 15s). Until then the registry shows their last-saved descriptor.
 - The offline demo reuses the `BUYER_*` account id from `.env` on the mock ledger, which can
   look confusing next to live data.
 
@@ -137,7 +160,8 @@ In rough priority order.
 ```bash
 npm install
 npm run demo:offline          # zero config, nothing leaves the machine
-npm run demo                  # live: needs .env (WALLET, BUYER_*, HEDERA_* for tabs/HCS, API keys)
+npm run demo                  # live: open http://127.0.0.1:4021 (User / Deployer)
+                              # needs .env (WALLET, BUYER_*, HEDERA_* for tabs/HCS, API keys)
 npm test                      # 117 tests
 npm run test:live             # live settlement + mirror-node checks
 npx tsx scripts/live-agent.ts # the whole lifecycle as an agent, live

@@ -124,9 +124,28 @@ npm install
 npm run demo:offline     # zero config: mock LLM + mock facilitator, nothing leaves your machine
 ```
 
-Open <http://localhost:4021>: income, units sold, the per-call price spread, savings versus flat
-pricing, live payments, and a **Stream** button on each tab-enabled lane
-(`?lane=llm&stream=llm` opens straight into a live metered stream).
+Open <http://localhost:4021>. The top switch has two modes:
+
+- **User**, for people consuming services.
+  - **Marketplace**: every registered service with its description, per-unit price, typical
+    call, reputation score and interfaces. You can search, filter by capability and sort. Open a
+    card to see the reputation breakdown and recent receipts, or to **Try it**: the whole
+    lifecycle runs step by step (quote → budget check → pay / don't pay → verify → receipt), with
+    real settlement.
+  - **Playground**: pick a service and a way in (Buyer SDK, Agent SDK, **MCP connector**, A2A,
+    raw HTTP + x402, CLI). You get ready-to-paste code generated from the service's live
+    descriptor, and **Run** performs the same call.
+  - AI agents don't need the page. The "Building an AI agent?" panel shows the registry,
+    MCP, SDK and A2A entry points to the same data.
+- **Deployer**, for people selling services.
+  - **＋ Publish an API**: paste a URL, *Check* it for free (detected meter, suggested rate,
+    price variants versus flat), then *Publish* it into the registry.
+  - The dashboard: income, the per-call price spread, savings versus flat pricing, lanes with a
+    test buyer and a **Stream** button on tab lanes, the registry and reputation, and live
+    payments.
+
+Deep links: `#user/playground`, `?service=llm&integ=mcp`, `?open=weather&tab=try`, `#deployer`,
+`?lane=llm&stream=llm`.
 
 For real settlement on Hedera testnet:
 
@@ -258,8 +277,11 @@ src/hub.ts         events, websocket, tape, analytics, policy, HCS receipts, das
 src/paid-fetch.ts  the buyer SDK: caps, budget, tabs, streaming, body verification
 src/mcp.ts         MCP server: any agent becomes a paying customer, with limits
 src/mock/          mock upstream + a mock facilitator that really checks signatures
-public/index.html  the dashboard
-lanes.json         every API being sold; one entry per lane
+public/            the web UI, no build step: index.html (shell + User/Deployer switch),
+                   user.js (marketplace + service drawer), playground.js (integration code + Run),
+                   deployer.js (seller dashboard), app.js (modes, publish panel, deep links)
+lanes.json         every API being sold; one entry per lane (with description + capabilities)
+STATUS.md          what is done, what is pending, limitations, known issues
 packages/mx402/    the npm package: bundled SDK (import "mx402") + CLI (npx mx402), zero dependencies
 ```
 

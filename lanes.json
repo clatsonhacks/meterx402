@@ -10,9 +10,7 @@
     "tab: true offers Metered Tabs (allowance-backed sessions + streaming) on that lane.",
     "Payouts go to the top-level wallet."
   ],
-
   "wallet": "${WALLET}",
-
   "lanes": [
     {
       "name": "llm",
@@ -27,8 +25,14 @@
       "sample": "/chat/completions",
       "method": "POST",
       "body": "{\"model\":\"${LLM_MODEL:-openai/gpt-oss-20b}\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain metered x402 payments in 40 words\"}]}",
-      "headers": { "Authorization": "Bearer ${GROQ_API_KEY}" },
-      "tab": true
+      "headers": {
+        "Authorization": "Bearer ${GROQ_API_KEY}"
+      },
+      "tab": true,
+      "description": "Open-source LLM (gpt-oss-20b on Groq). You pay for the tokens a reply actually uses, and can stream it.",
+      "capabilities": [
+        "text_generation"
+      ]
     },
     {
       "name": "weather",
@@ -40,7 +44,11 @@
       "maxUnits": 240,
       "port": 4092,
       "sample": "/?latitude=13.0827&longitude=80.2707&hourly=temperature_2m&forecast_days=2",
-      "tab": true
+      "tab": true,
+      "description": "Hourly weather forecasts for any coordinates, from Open-Meteo. Priced per forecast hour returned.",
+      "capabilities": [
+        "weather_forecast"
+      ]
     },
     {
       "name": "etherscan",
@@ -51,7 +59,13 @@
       "maxUnits": 1000,
       "port": 4094,
       "sample": "/?chainid=1&module=account&action=txlist&address=0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe&page=1&offset=10&sort=desc",
-      "query": { "apikey": "${ETHERSCAN_API_KEY}" }
+      "query": {
+        "apikey": "${ETHERSCAN_API_KEY}"
+      },
+      "description": "Ethereum transaction history for any address, from Etherscan. Priced per transaction returned.",
+      "capabilities": [
+        "blockchain_data"
+      ]
     },
     {
       "name": "uniswap-data",
@@ -63,8 +77,14 @@
       "port": 4098,
       "method": "POST",
       "body": "{\"query\":\"{ pools(first: 5, orderBy: totalValueLockedUSD, orderDirection: desc) { id totalValueLockedUSD } }\"}",
-      "headers": { "Authorization": "Bearer ${GRAPH_API_KEY}" },
-      "tab": true
+      "headers": {
+        "Authorization": "Bearer ${GRAPH_API_KEY}"
+      },
+      "tab": true,
+      "description": "Uniswap v3 pools and TVL from The Graph. Priced per pool returned.",
+      "capabilities": [
+        "onchain_analytics"
+      ]
     },
     {
       "name": "tally",
@@ -76,7 +96,13 @@
       "port": 4097,
       "method": "POST",
       "body": "{\"query\":\"query { chains { id name } }\"}",
-      "headers": { "Api-Key": "${TALLY_API_KEY}" }
+      "headers": {
+        "Api-Key": "${TALLY_API_KEY}"
+      },
+      "description": "DAO governance data from Tally: chains, proposals. Priced per record returned.",
+      "capabilities": [
+        "dao_governance"
+      ]
     },
     {
       "name": "alphavantage",
@@ -85,7 +111,13 @@
       "rate": 0.01,
       "port": 4093,
       "sample": "/?function=GLOBAL_QUOTE&symbol=IBM",
-      "query": { "apikey": "${ALPHAVANTAGE_KEY}" }
+      "query": {
+        "apikey": "${ALPHAVANTAGE_KEY}"
+      },
+      "description": "Stock quotes from Alpha Vantage. One flat price per quote.",
+      "capabilities": [
+        "market_data"
+      ]
     }
   ]
 }

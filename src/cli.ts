@@ -35,6 +35,10 @@ ${bold("mx402")} — turn any API into an x402 API that charges for what each ca
   ${bold("mx402 inspect <service-id | url>")} [--registry url]
       A service's descriptor, pricing, settlement options and reputation.
 
+  ${bold("mx402 mcp")}
+      Run the MeterX402 MCP server over stdio (list_services, get_quote, pay_for_service, …).
+      Configure with MX_HUB and BUYER_ACCOUNT_ID / BUYER_PRIVATE_KEY / BUYER_BUDGET.
+
   ${bold("mx402 wallet new")} [--hbar 5]
       Create a Hedera testnet account (needs HEDERA_ACCOUNT_ID/HEDERA_PRIVATE_KEY
       in .env) and print it, to use as --wallet.
@@ -47,6 +51,7 @@ export async function cli(argv: string[]): Promise<void> {
   const cmd = argv[0];
   if (!cmd || cmd === "--help" || cmd === "-h" || cmd === "help") { console.log(HELP); process.exit(cmd ? 0 : 1); }
   if (cmd === "--help-all") { const { GATEWAY_HELP } = await import("./gateway.ts"); console.log(GATEWAY_HELP); return; }
+  if (cmd === "mcp") { await import("./mcp.ts"); return; } // the MCP server, over stdio
   if (cmd === "check") return check(argv.slice(1));
   if (cmd === "publish") return publish(argv.slice(1));
   if (cmd === "inspect") return inspect(argv.slice(1));
