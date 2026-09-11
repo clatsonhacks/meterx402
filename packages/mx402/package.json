@@ -1,0 +1,44 @@
+{
+  "name": "mx402",
+  "version": "0.2.0",
+  "description": "A payment layer for APIs and AI agents: usage-based x402 payments, a service registry, reputation, Metered Tabs and A2A/MCP adapters, settled on Hedera.",
+  "type": "module",
+  "bin": {
+    "mx402": "dist/mx402.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "x402",
+    "hedera",
+    "metered",
+    "usage-based",
+    "pay-per-token",
+    "api",
+    "monetization",
+    "agents",
+    "micropayments",
+    "a2a",
+    "mcp",
+    "registry",
+    "reputation"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clatsonhacks/meterx402.git"
+  },
+  "scripts": {
+    "prepublishOnly": "cd ../.. && node scripts/build-cli.mjs"
+  },
+  "exports": {
+    ".": "./dist/sdk.mjs"
+  },
+  "main": "./dist/sdk.mjs"
+}

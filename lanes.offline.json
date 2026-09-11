@@ -1,0 +1,49 @@
+{
+  "_comment": "Offline demo lanes (npm run demo:offline): all upstreams are the local mock on :4800, settlement goes to the mock facilitator on :4899.",
+  "wallet": "${WALLET:-0.0.6001}",
+  "lanes": [
+    {
+      "name": "llm",
+      "upstream": "http://127.0.0.1:4800",
+      "meter": "tokens",
+      "rate": 0.01,
+      "per": 1000,
+      "min": 0.0001,
+      "maxUnits": 2000,
+      "port": 4095,
+      "sample": "/v1/chat/completions",
+      "method": "POST",
+      "body": "{\"model\":\"mock-1\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain x402 metered payments in 40 words\"}]}",
+      "tab": true
+    },
+    {
+      "name": "pools",
+      "upstream": "http://127.0.0.1:4800/graphql",
+      "meter": "rows",
+      "rate": 0.002,
+      "min": 0.002,
+      "maxUnits": 100,
+      "port": 4098,
+      "method": "POST",
+      "body": "{\"query\":\"{ pools(first: 5) { id totalValueLockedUSD } }\"}",
+      "tab": true
+    },
+    {
+      "name": "blob",
+      "upstream": "http://127.0.0.1:4800",
+      "meter": "bytes",
+      "rate": 0.001,
+      "per": 1000,
+      "port": 4096,
+      "sample": "/blob?kb=8"
+    },
+    {
+      "name": "price-flat",
+      "upstream": "http://127.0.0.1:4800",
+      "meter": "request",
+      "rate": 0.01,
+      "port": 4094,
+      "sample": "/price"
+    }
+  ]
+}

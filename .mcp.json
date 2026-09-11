@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "meterx402": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp.ts"]
+    }
+  }
+}

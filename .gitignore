@@ -1,0 +1,9 @@
+node_modules/
+.env
+tape.jsonl
+tape.offline.jsonl
+*.log
+packages/mx402/dist/
+*.tgz
+registry.json
+registry.offline.json

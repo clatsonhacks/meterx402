@@ -1,0 +1,44 @@
+{
+  "name": "meterx402",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Metered x402: sell any API by what it consumes (tokens, rows, bytes, ms), settled on Hedera.",
+  "bin": {
+    "mx402": "bin/mx402.mjs"
+  },
+  "scripts": {
+    "demo": "tsx src/serve.ts",
+    "demo:offline": "tsx src/serve.ts --offline",
+    "hub": "tsx src/hub.ts",
+    "gateway": "tsx src/gateway.ts",
+    "mcp": "tsx src/mcp.ts",
+    "mock": "tsx src/mock/upstream.ts",
+    "facilitator:mock": "tsx src/mock/facilitator.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "tsx --test test/unit.test.ts test/tabs.test.ts test/detect.test.ts test/protocol.test.ts",
+    "test:e2e": "tsx --test --test-concurrency=1 test/e2e.test.ts test/stream-tabs.test.ts test/lifecycle.test.ts",
+    "test:live": "tsx test/live-hedera.ts",
+    "build:cli": "node scripts/build-cli.mjs",
+    "cli": "node --import tsx src/cli-entry.ts"
+  },
+  "dependencies": {
+    "@hiero-ledger/sdk": "^2.85.0",
+    "@hono/node-server": "^2.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@x402/core": "2.25.0",
+    "@x402/fetch": "2.25.0",
+    "@x402/hedera": "2.25.0",
+    "hono": "^4.13.7",
+    "tsx": "^4.23.13",
+    "ws": "^8.18.0",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

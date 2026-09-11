@@ -1,0 +1,91 @@
+{
+  "_comment": [
+    "Every metered API, in one place. To sell a new API: add an object, put its key in .env, restart.",
+    "${VAR} is read from the environment at spawn time; ${VAR:-default} falls back. A lane whose",
+    "required vars are missing is SKIPPED, because a keyless gateway would quote and then 401.",
+    "",
+    "Pricing: meter = tokens | tokens:output | rows | rows:<path> | bytes | ms | json:<path> | request",
+    "         rate = HBAR per `per` units; min = minimum per paid call; maxUnits = seller cap per call.",
+    "Buyers cap a call with the header x-meter-max-units (or max_tokens in an LLM body).",
+    "tab: true offers Metered Tabs (allowance-backed sessions + streaming) on that lane.",
+    "Payouts go to the top-level wallet."
+  ],
+
+  "wallet": "${WALLET}",
+
+  "lanes": [
+    {
+      "name": "llm",
+      "_note": "Groq (OpenAI-compatible). Set GROQ_API_KEY in .env. Streams token by token on a tab.",
+      "upstream": "${LLM_URL:-https://api.groq.com/openai/v1}",
+      "meter": "tokens",
+      "rate": 0.01,
+      "per": 1000,
+      "min": 0.0001,
+      "maxUnits": 4000,
+      "port": 4095,
+      "sample": "/chat/completions",
+      "method": "POST",
+      "body": "{\"model\":\"${LLM_MODEL:-openai/gpt-oss-20b}\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain metered x402 payments in 40 words\"}]}",
+      "headers": { "Authorization": "Bearer ${GROQ_API_KEY}" },
+      "tab": true
+    },
+    {
+      "name": "weather",
+      "_note": "Open-Meteo: open data, no key at all. Priced per hour of forecast returned.",
+      "upstream": "https://api.open-meteo.com/v1/forecast",
+      "meter": "rows:hourly.time",
+      "rate": 0.0001,
+      "min": 0.0005,
+      "maxUnits": 240,
+      "port": 4092,
+      "sample": "/?latitude=13.0827&longitude=80.2707&hourly=temperature_2m&forecast_days=2",
+      "tab": true
+    },
+    {
+      "name": "etherscan",
+      "upstream": "https://api.etherscan.io/v2/api",
+      "meter": "rows",
+      "rate": 0.001,
+      "min": 0.001,
+      "maxUnits": 1000,
+      "port": 4094,
+      "sample": "/?chainid=1&module=account&action=txlist&address=0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe&page=1&offset=10&sort=desc",
+      "query": { "apikey": "${ETHERSCAN_API_KEY}" }
+    },
+    {
+      "name": "uniswap-data",
+      "upstream": "https://gateway.thegraph.com/api/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
+      "meter": "rows",
+      "rate": 0.002,
+      "min": 0.002,
+      "maxUnits": 100,
+      "port": 4098,
+      "method": "POST",
+      "body": "{\"query\":\"{ pools(first: 5, orderBy: totalValueLockedUSD, orderDirection: desc) { id totalValueLockedUSD } }\"}",
+      "headers": { "Authorization": "Bearer ${GRAPH_API_KEY}" },
+      "tab": true
+    },
+    {
+      "name": "tally",
+      "upstream": "https://api.tally.xyz/query",
+      "meter": "rows",
+      "rate": 0.0005,
+      "min": 0.001,
+      "maxUnits": 200,
+      "port": 4097,
+      "method": "POST",
+      "body": "{\"query\":\"query { chains { id name } }\"}",
+      "headers": { "Api-Key": "${TALLY_API_KEY}" }
+    },
+    {
+      "name": "alphavantage",
+      "upstream": "https://www.alphavantage.co/query",
+      "meter": "request",
+      "rate": 0.01,
+      "port": 4093,
+      "sample": "/?function=GLOBAL_QUOTE&symbol=IBM",
+      "query": { "apikey": "${ALPHAVANTAGE_KEY}" }
+    }
+  ]
+}
