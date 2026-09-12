@@ -11,3 +11,30 @@ ngrok.exe
 ngrok.zip
 .mcp.json
 data/uploads/
+
+# Test files
+test-dataset.csv
+test-*.csv
+test-*.json
+test-*.jsonl
+test-*.md
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Package manager
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
