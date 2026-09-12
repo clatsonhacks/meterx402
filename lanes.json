@@ -245,6 +245,44 @@
         "weather_forecast"
       ],
       "unitLabel": "forecast hour"
+    },
+    {
+      "name": "lending-markets",
+      "title": "Lending Rates Everywhere",
+      "_note": "The Graph: one Messari-standardized lending query over Aave v3 (7 chains), Compound v2/v3, Spark, Venus, Benqi, Radiant. Served by src/graph/server.ts when GRAPH_API_KEY is set.",
+      "upstream": "${MX_GRAPH_URL}",
+      "meter": "rows:markets",
+      "rate": "0.0005",
+      "min": "0.001",
+      "maxUnits": 100,
+      "port": 4135,
+      "sample": "/markets?tokens=USDC&first=10&sort=supply_apy",
+      "description": "Supply and borrow rates across lending protocols and chains from The Graph's standardized subgraphs: APY, deposits, utilization and max LTV in one shape. Priced per market returned.",
+      "capabilities": [
+        "lending_rates",
+        "onchain_analytics"
+      ],
+      "unitLabel": "market"
+    },
+    {
+      "name": "subgraph-gateway",
+      "title": "Any Subgraph, Per Entity",
+      "_note": "Any subgraph on The Graph Network without a Graph API key: POST { query } to /subgraphs/<id>; billed per object in the answer (json:entities). Errors and empty answers cost nothing.",
+      "upstream": "${MX_GRAPH_URL}",
+      "meter": "json:entities",
+      "rate": "0.0001",
+      "min": "0.0005",
+      "maxUnits": 2000,
+      "port": 4136,
+      "method": "POST",
+      "sample": "/subgraphs/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
+      "body": "{\"query\":\"{ pools(first: 5, orderBy: totalValueLockedUSD, orderDirection: desc, where: { totalValueLockedUSD_lt: \\\"5000000000\\\" }) { id feeTier totalValueLockedUSD token0 { symbol } token1 { symbol } } }\"}",
+      "description": "Run any GraphQL query on any of The Graph's 15,000+ subgraphs without your own API key. Priced per entity returned; a query that errors or finds nothing is free.",
+      "capabilities": [
+        "subgraph_query",
+        "onchain_analytics"
+      ],
+      "unitLabel": "entity"
     }
   ]
 }

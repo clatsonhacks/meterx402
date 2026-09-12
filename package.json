@@ -17,7 +17,7 @@
     "facilitator:mock": "tsx src/mock/facilitator.ts",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "tsx --test test/unit.test.ts test/tabs.test.ts test/detect.test.ts test/protocol.test.ts test/hcs14.test.ts test/hts.test.ts test/subscriptions.test.ts test/rfq.test.ts test/data.test.ts test/graph.test.ts test/analyst.test.ts",
+    "test:unit": "tsx --test test/unit.test.ts test/tabs.test.ts test/detect.test.ts test/protocol.test.ts test/hcs14.test.ts test/hts.test.ts test/subscriptions.test.ts test/rfq.test.ts test/data.test.ts test/graph.test.ts test/analyst.test.ts test/swap.test.ts",
     "test:e2e": "tsx --test --test-concurrency=1 test/e2e.test.ts test/stream-tabs.test.ts test/lifecycle.test.ts",
     "test:live": "tsx test/live-hedera.ts",
     "build:cli": "node scripts/build-cli.mjs",

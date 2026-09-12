@@ -134,6 +134,57 @@ server.tool(
 );
 
 server.tool(
+  "find_lending_markets",
+  "Lending markets across protocols and chains from The Graph's standardized (Messari lending) subgraphs: Aave v3 on 7 chains, Compound v2 and v3, Spark, Venus, Benqi and Radiant, in one shape (supply APY, variable borrow APY, deposits, utilization, max LTV). Paid per market returned via x402, within the budget. Use it to find where a token earns the most, or is cheapest to borrow.",
+  {
+    tokens: z.array(z.string()).max(3).optional().describe("Markets for any of these, e.g. [\"USDC\"]"),
+    chains: z.array(z.string()).optional().describe("e.g. [\"ethereum\",\"arbitrum\"]; empty = all"),
+    protocols: z.array(z.string()).optional().describe("e.g. [\"aave-v3\",\"compound-v3\"]; empty = all"),
+    sort: z.enum(["supply_apy", "borrow_apy", "tvl"]).optional().describe("supply_apy: highest first; borrow_apy: cheapest first"),
+    min_tvl_usd: z.number().nonnegative().optional(),
+    first: z.number().int().min(1).max(50).optional().describe("Rows to buy (each is billed)"),
+  },
+  async ({ tokens, chains, protocols, sort, min_tvl_usd, first }) => {
+    const mx = await buyer();
+    if (!mx) return noWallet();
+    const query: Record<string, string> = { sort: sort ?? "supply_apy", first: String(first ?? 10) };
+    if (tokens?.length) query.tokens = tokens.join(",");
+    if (chains?.length) query.chains = chains.join(",");
+    if (protocols?.length) query.protocols = protocols.join(",");
+    if (min_tvl_usd != null) query.min_tvl = String(min_tvl_usd);
+    try {
+      return text(summarize(await mx.call("lending-markets", { path: "/markets", method: "GET", query, maxUnits: first ?? 10 })));
+    } catch (e) {
+      return text(e instanceof BudgetError ? `Not paid: ${e.message}` : `Failed: ${String((e as Error)?.message ?? e)}`, true);
+    }
+  },
+);
+
+server.tool(
+  "query_subgraph",
+  "Run any GraphQL query against any subgraph on The Graph Network (15,000+) without a Graph API key: MeterX402 holds the key and you pay per entity returned (every object in the answer counts once), via x402 within your budget. A query that errors or finds nothing costs nothing. Pass subgraph_id, or deployment_id for a pinned Qm… deployment. Keep `first:` small and cap spend with max_entities.",
+  {
+    subgraph_id: z.string().optional().describe("e.g. 5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV (Uniswap v3, Ethereum)"),
+    deployment_id: z.string().optional().describe("a Qm… deployment id, instead of subgraph_id"),
+    query: z.string().min(3).describe("GraphQL, e.g. { pools(first: 5) { id feeTier } }"),
+    variables: z.record(z.string(), z.unknown()).optional(),
+    max_entities: z.number().int().positive().optional().describe("Refuse to pay for more than this many entities"),
+  },
+  async ({ subgraph_id, deployment_id, query, variables, max_entities }) => {
+    const id = subgraph_id ?? deployment_id;
+    if (!id) return text("Pass subgraph_id (or deployment_id).", true);
+    const mx = await buyer();
+    if (!mx) return noWallet();
+    try {
+      const path = `/${subgraph_id ? "subgraphs" : "deployments"}/${id}`;
+      return text(summarize(await mx.call("subgraph-gateway", { path, method: "POST", body: { query, ...(variables ? { variables } : {}) }, maxUnits: max_entities })));
+    } catch (e) {
+      return text(e instanceof BudgetError ? `Not paid: ${e.message}` : `Failed: ${String((e as Error)?.message ?? e)}`, true);
+    }
+  },
+);
+
+server.tool(
   "list_services",
   "Discover paid services on MeterX402 by what they do. Services are priced by what a call consumes (tokens, rows, bytes…), carry a reputation score computed from their settlement and performance history, and are ranked best-first. Use get_quote or call_service next.",
   {

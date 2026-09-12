@@ -5,6 +5,7 @@
 //
 //   1. plans a query with an LLM                              paid per token  (llm)
 //   2. reads pools from The Graph's standardized DEX subgraphs paid per pool   (dex-pools)
+//      and lending rates from its standardized lending ones   paid per market (lending-markets)
 //   3. prices the trade with the Uniswap Trading API          paid per quote  (uniswap-quote)
 //   4. reasons over the numbers with the LLM                  paid per token  (llm)
 //
@@ -19,6 +20,7 @@
 
 import type { CallResult, CallRequest, MeterX402 } from "../sdk/buyer.ts";
 import { DEX_SOURCES, expandSymbol, type Pool, type PoolQuery } from "./standard.ts";
+import type { LendingMarket } from "./lending.ts";
 
 /** Chains the Uniswap Trading API quotes on that the standardized subgraphs also cover. */
 export const UNISWAP_API_CHAINS = new Set([1, 10, 56, 137, 8453, 42161, 42220]);
@@ -36,10 +38,17 @@ export interface Trade {
   amount_in: "usd" | "token";
 }
 
+export interface Lending {
+  token: string;
+  side: "supply" | "borrow";
+}
+
 export interface Plan {
   intent: string;
   pools: PoolQuery;
   trade: Trade | null;
+  /** Lending rates to read alongside (or instead of) pools. */
+  lending?: Lending | null;
 }
 
 export interface QuoteSummary {
@@ -59,6 +68,8 @@ export interface QuoteSummary {
   gasless: boolean;
   /** What the same trade would cost in gas on the classic route, when the API says. */
   classic_gas_usd: number | null;
+  /** Enough to build the swap for a real wallet (see graph/swap.ts). */
+  request: { chain_id: number; token_in: string; token_out: string; amount: string; decimals_in: number; decimals_out: number };
 }
 
 export interface Spend {
@@ -77,6 +88,7 @@ export interface AnalystReport {
   planner: "llm" | "rules";
   plan: Plan;
   pools: Pool[];
+  markets: LendingMarket[];
   sources: { ok: number; total: number; failed: string[] };
   quote: QuoteSummary | null;
   facts: string[];
@@ -94,6 +106,7 @@ export interface AnalystOptions {
   /** Service ids in the registry. Pass false to skip a step. */
   llm?: string | false;
   pools?: string;
+  lending?: string | false;
   quote?: string | false;
   maxPools?: number;
   model?: string;
@@ -129,10 +142,17 @@ export function rulePlan(question: string): Plan {
     else trade = { sell: tokens[0], buy: tokens[1], amount: 1000, amount_in: "usd" };
     if (!(trade.amount > 0)) trade.amount = 1000;
   }
+  // lending: asked for directly, or the natural comparison when a stablecoin is looking for yield
+  const lendWords = /\blend|borrow|\bloans?\b|interest|savings|money market|deposit rate|supply rate/.test(lower);
+  const stable = tokens.find((t) => STABLES.has(t));
+  const lending: Lending | null = lendWords
+    ? { token: stable ?? tokens[0] ?? "USDC", side: /borrow|\bloans?\b/.test(lower) ? "borrow" : "supply" }
+    : sort === "fee_apr" && stable ? { token: stable, side: "supply" } : null;
   return {
-    intent: swap ? "swap" : sort === "fee_apr" ? "yield" : "liquidity",
+    intent: swap ? "swap" : lendWords && tokens.length < 2 ? "lending" : sort === "fee_apr" ? "yield" : "liquidity",
     pools: { tokens, chains, protocols, sort, minTvlUsd: sort === "fee_apr" ? 250_000 : 50_000, first: 10 },
     trade,
+    lending,
   };
 }
 
@@ -150,7 +170,13 @@ export function mergePlan(raw: unknown, fallback: Plan): Plan {
   const trade: Trade | null = t && typeof t === "object" && t.sell && t.buy && Number(t.amount) > 0
     ? { sell: canonical(String(t.sell)), buy: canonical(String(t.buy)), amount: Number(t.amount), amount_in: t.amount_in === "token" ? "token" : "usd" }
     : t === null ? null : fallback.trade;
+  const l = j.lending;
+  const lending: Lending | null = l && typeof l === "object" && typeof l.token === "string" && /^[A-Za-z0-9.]{2,10}$/.test(l.token)
+    ? { token: canonical(l.token), side: l.side === "borrow" ? "borrow" : "supply" }
+    // a question that names lending gets it even when the model forgets: it is one cheap call
+    : fallback.lending ?? null;
   return {
+    lending,
     intent: typeof j.intent === "string" && j.intent.length < 40 ? j.intent : fallback.intent,
     pools: {
       tokens: tokens?.length ? tokens : fallback.pools.tokens,
@@ -181,29 +207,49 @@ const usd = (n: number | null | undefined) =>
 const pairOf = (p: Pool) => `${p.protocol}/${p.chain} ${p.tokens.join("-")}${p.fee_percent != null ? ` ${p.fee_percent}%` : ""}`;
 
 /** What the answer is allowed to rest on. Deterministic, so it is tested. */
-export function factsFor(plan: Plan, pools: Pool[], quote: QuoteSummary | null, sources: AnalystReport["sources"]): string[] {
+export function factsFor(plan: Plan, pools: Pool[], quote: QuoteSummary | null, sources: AnalystReport["sources"], markets: LendingMarket[] = []): string[] {
   const facts: string[] = [];
   const chains = new Set(pools.map((p) => p.chain));
-  facts.push(`${pools.length} pools from ${sources.ok}/${sources.total} standardized subgraphs (Messari DEX AMM schema) across ${chains.size} chain(s)${sources.failed.length ? `; unavailable: ${sources.failed.join(", ")}` : ""}.`);
-  if (!pools.length) return facts;
-  const byTvl = [...pools].sort((a, b) => b.tvl_usd - a.tvl_usd)[0];
-  facts.push(`Deepest: ${pairOf(byTvl)} with ${usd(byTvl.tvl_usd)} TVL.`);
-  // a yield claim needs depth behind it, whatever floor the plan asked for
-  const floor = Math.max(plan.pools.minTvlUsd ?? 0, 100_000);
-  const solid = pools.filter((p) => p.fee_apr_percent != null && p.tvl_usd >= floor);
-  const bestApr = [...solid].sort((a, b) => (b.fee_apr_percent ?? 0) - (a.fee_apr_percent ?? 0))[0];
-  if (bestApr) facts.push(`Highest fee APR with TVL ≥ ${usd(floor)}: ${pairOf(bestApr)} at ${bestApr.fee_apr_percent}% (24h volume ${usd(bestApr.volume_24h_usd)}, TVL ${usd(bestApr.tvl_usd)}).`);
-  const busiest = [...pools].filter((p) => p.volume_24h_usd != null).sort((a, b) => (b.volume_24h_usd ?? 0) - (a.volume_24h_usd ?? 0))[0];
-  if (busiest && busiest !== bestApr) facts.push(`Most traded today: ${pairOf(busiest)} with ${usd(busiest.volume_24h_usd)} in 24h.`);
-  if (chains.size > 1) {
-    // a chain whose best pool holds pocket change says nothing about depth there
-    const perChain = [...chains].map((c) => pools.filter((p) => p.chain === c).sort((a, b) => b.tvl_usd - a.tvl_usd)[0]).filter((p) => p.tvl_usd >= 1000);
-    if (perChain.length > 1) facts.push(`Best pool per chain by TVL: ${perChain.map((p) => `${p.chain} ${usd(p.tvl_usd)} (${p.protocol} ${p.fee_percent ?? "?"}%)`).join("; ")}.`);
+  let bestApr: Pool | undefined;
+  if (sources.total || pools.length) {
+    facts.push(`${pools.length} pools from ${sources.ok}/${sources.total} DEX subgraphs (Messari DEX AMM schema) across ${chains.size} chain(s)${sources.failed.length ? `; unavailable: ${sources.failed.join(", ")}` : ""}.`);
   }
-  const thin = pools.filter((p) => (p.fee_apr_percent ?? 0) > 100 && p.tvl_usd < 250_000);
-  if (thin.length) facts.push(`Caution: ${thin.length} pool(s) show >100% fee APR on under $250k TVL, which usually means one day of unusual volume, not a lasting yield.`);
-  const stale = pools.filter((p) => p.volume_24h_usd == null).length;
-  if (stale) facts.push(`${stale} pool(s) have no daily snapshot from the last two days, so no volume or APR is claimed for them.`);
+  if (pools.length) {
+    const byTvl = [...pools].sort((a, b) => b.tvl_usd - a.tvl_usd)[0];
+    facts.push(`Deepest: ${pairOf(byTvl)} with ${usd(byTvl.tvl_usd)} TVL.`);
+    // a yield claim needs depth behind it, whatever floor the plan asked for
+    const floor = Math.max(plan.pools.minTvlUsd ?? 0, 100_000);
+    const solid = pools.filter((p) => p.fee_apr_percent != null && p.tvl_usd >= floor);
+    bestApr = [...solid].sort((a, b) => (b.fee_apr_percent ?? 0) - (a.fee_apr_percent ?? 0))[0];
+    if (bestApr) facts.push(`Highest fee APR with TVL ≥ ${usd(floor)}: ${pairOf(bestApr)} at ${bestApr.fee_apr_percent}% (24h volume ${usd(bestApr.volume_24h_usd)}, TVL ${usd(bestApr.tvl_usd)}).`);
+    const busiest = [...pools].filter((p) => p.volume_24h_usd != null).sort((a, b) => (b.volume_24h_usd ?? 0) - (a.volume_24h_usd ?? 0))[0];
+    if (busiest && busiest !== bestApr) facts.push(`Most traded today: ${pairOf(busiest)} with ${usd(busiest.volume_24h_usd)} in 24h.`);
+    if (chains.size > 1) {
+      // a chain whose best pool holds pocket change says nothing about depth there
+      const perChain = [...chains].map((c) => pools.filter((p) => p.chain === c).sort((a, b) => b.tvl_usd - a.tvl_usd)[0]).filter((p) => p.tvl_usd >= 1000);
+      if (perChain.length > 1) facts.push(`Best pool per chain by TVL: ${perChain.map((p) => `${p.chain} ${usd(p.tvl_usd)} (${p.protocol} ${p.fee_percent ?? "?"}%)`).join("; ")}.`);
+    }
+    const thin = pools.filter((p) => (p.fee_apr_percent ?? 0) > 100 && p.tvl_usd < 250_000);
+    if (thin.length) facts.push(`Caution: ${thin.length} pool(s) show >100% fee APR on under $250k TVL, which usually means one day of unusual volume, not a lasting yield.`);
+    const stale = pools.filter((p) => p.volume_24h_usd == null).length;
+    if (stale) facts.push(`${stale} pool(s) have no daily snapshot from the last two days, so no volume or APR is claimed for them.`);
+  }
+  if (markets.length) {
+    // two standardized schemas, one comparison: nothing here is converted between protocols
+    const token = plan.lending?.token ?? markets[0].token;
+    const deep = markets.filter((m) => m.deposits_usd >= 1_000_000);
+    facts.push(`${markets.length} ${token} lending markets from the standardized lending subgraphs across ${new Set(markets.map((m) => m.chain)).size} chain(s).`);
+    const bestSupply = [...deep].filter((m) => m.supply_apy_percent != null).sort((a, b) => (b.supply_apy_percent ?? 0) - (a.supply_apy_percent ?? 0))[0];
+    if (bestSupply) facts.push(`Best ${bestSupply.token} supply rate with deposits ≥ $1.00M: ${bestSupply.protocol}/${bestSupply.chain} at ${bestSupply.supply_apy_percent}% APY (deposits ${usd(bestSupply.deposits_usd)}${bestSupply.utilization_percent != null ? `, ${bestSupply.utilization_percent}% borrowed` : ""}).`);
+    const cheapest = [...deep].filter((m) => m.borrow_apy_percent != null).sort((a, b) => (a.borrow_apy_percent ?? 0) - (b.borrow_apy_percent ?? 0))[0];
+    if (cheapest && plan.lending?.side === "borrow") facts.push(`Cheapest variable ${cheapest.token} borrow with deposits ≥ $1.00M: ${cheapest.protocol}/${cheapest.chain} at ${cheapest.borrow_apy_percent}% APY.`);
+    if (bestSupply && bestApr?.fee_apr_percent != null && bestApr.tokens.some((s) => expandSymbol(bestSupply.token).includes(s.toUpperCase()))) {
+      const spread = Math.round((bestApr.fee_apr_percent - (bestSupply.supply_apy_percent ?? 0)) * 100) / 100;
+      facts.push(`Compared: ${pairOf(bestApr)} showed ${bestApr.fee_apr_percent}% fee APR against ${bestSupply.supply_apy_percent}% for lending ${bestSupply.token} on ${bestSupply.protocol}/${bestSupply.chain}, a difference of ${spread} points. The fee APR ignores impermanent loss and price exposure; the lending rate carries neither.`);
+    }
+    const hot = deep.filter((m) => (m.utilization_percent ?? 0) >= 90);
+    if (hot.length) facts.push(`${hot.length} of these markets are at least 90% borrowed, so withdrawals there may have to wait for repayments.`);
+  }
   if (quote) {
     // only what the API actually returned: a missing field is left out, never guessed
     const parts = [`${fmtNum(quote.amount_in)} ${quote.sell} → ${fmtNum(quote.amount_out)} ${quote.buy} (${fmtNum(quote.price)} ${quote.buy} per ${quote.sell})`];
@@ -258,7 +304,7 @@ export function groundProse(text: string, sources: string): { text: string; drop
 // ── quoting ───────────────────────────────────────────────────────────────
 
 /** The trade as a Uniswap Trading API /quote body, on the best chain the pools found. */
-export function quoteRequest(trade: Trade, pools: Pool[]): { body: Record<string, unknown>; chain: string; chainId: number; decimalsOut: number; amountIn: number } | null {
+export function quoteRequest(trade: Trade, pools: Pool[]): { body: Record<string, unknown>; chain: string; chainId: number; decimalsIn: number; decimalsOut: number; amountIn: number } | null {
   const sells = expandSymbol(trade.sell), buys = expandSymbol(trade.buy);
   const idx = (p: Pool, alts: string[]) => p.tokens.findIndex((s) => alts.includes(s.toUpperCase()));
   const candidates = pools
@@ -276,6 +322,7 @@ export function quoteRequest(trade: Trade, pools: Pool[]): { body: Record<string
   return {
     chain: pool.chain,
     chainId: pool.chain_id,
+    decimalsIn: decIn,
     decimalsOut: decOut,
     amountIn,
     body: {
@@ -302,6 +349,10 @@ export function summarizeQuote(data: any, req: NonNullable<ReturnType<typeof quo
     route: q.routeString ?? null, quote_id: q.quoteId ?? null,
     routing, gasless,
     classic_gas_usd: q.classicGasUseEstimateUSD == null ? null : Number(q.classicGasUseEstimateUSD),
+    request: {
+      chain_id: req.chainId, token_in: String(req.body.tokenIn), token_out: String(req.body.tokenOut),
+      amount: String(req.body.amount), decimals_in: req.decimalsIn, decimals_out: req.decimalsOut,
+    },
   };
 }
 
@@ -323,6 +374,7 @@ export async function analyze(question: string, opts: AnalystOptions): Promise<A
   const mx = opts.buyer;
   const llm = opts.llm === false ? null : opts.llm ?? "llm";
   const poolsService = opts.pools ?? "dex-pools";
+  const lendingService = opts.lending === false ? null : opts.lending ?? "lending-markets";
   const quoteService = opts.quote === false ? null : opts.quote ?? "uniswap-quote";
   const model = opts.model ?? process.env.LLM_MODEL ?? "openai/gpt-oss-20b";
   const step = opts.onStep ?? (() => {});
@@ -357,23 +409,41 @@ export async function analyze(question: string, opts: AnalystOptions): Promise<A
   let planner: AnalystReport["planner"] = "rules";
   const planText = await chat("plan", [
     "You turn a DeFi liquidity question into a data request. Reply with ONLY a JSON object:",
-    `{"intent": "yield|swap|liquidity|compare", "tokens": [up to 2 token symbols], "chains": [subset of ${JSON.stringify(CHAIN_NAMES)}] or [], "protocols": [subset of ${JSON.stringify(PROTOCOLS)}] or [], "sort": "tvl|volume|fee_apr", "min_tvl_usd": number, "first": number (max 20), "trade": null or {"sell": symbol, "buy": symbol, "amount": number, "amount_in": "usd|token"}}`,
+    `{"intent": "yield|swap|liquidity|lending|compare", "tokens": [up to 2 token symbols], "chains": [subset of ${JSON.stringify(CHAIN_NAMES)}] or [], "protocols": [subset of ${JSON.stringify(PROTOCOLS)}] or [], "sort": "tvl|volume|fee_apr", "min_tvl_usd": number, "first": number (max 20), "trade": null or {"sell": symbol, "buy": symbol, "amount": number, "amount_in": "usd|token"}, "lending": null or {"token": symbol, "side": "supply|borrow"}}`,
     "Empty chains/protocols means all. Use trade only when the user wants to swap or price a swap.",
+    "Use lending when the user asks about lending, borrowing or deposit rates, or wants yield on a stablecoin (then compare with supplying it). Use intent lending when pools are not needed at all.",
   ].join("\n"), q, 400);
   const parsed = planText ? extractJson(planText) : null;
   if (parsed) { plan = mergePlan(parsed, rules); planner = "llm"; }
   if (opts.maxPools) plan.pools.first = Math.min(plan.pools.first ?? 10, opts.maxPools);
 
-  // 2. data: one standardized query across every matching subgraph
-  const query: Record<string, string> = { sort: plan.pools.sort ?? "tvl", first: String(plan.pools.first ?? 10), min_tvl: String(plan.pools.minTvlUsd ?? 50_000) };
-  if (plan.pools.tokens?.length) query.tokens = plan.pools.tokens.join(",");
-  if (plan.pools.chains?.length) query.chains = plan.pools.chains.join(",");
-  if (plan.pools.protocols?.length) query.protocols = plan.pools.protocols.join(",");
-  const data = await paid("pools", poolsService, { path: "/pools", method: "GET", query, maxUnits: plan.pools.first });
-  const body = (data?.data ?? {}) as { pools?: Pool[]; sources?: { ok: boolean; protocol: string; chain: string }[] };
-  const pools = Array.isArray(body.pools) ? body.pools : [];
-  const reports = Array.isArray(body.sources) ? body.sources : [];
-  const sources = { ok: reports.filter((s) => s.ok).length, total: reports.length, failed: reports.filter((s) => !s.ok).map((s) => `${s.protocol}/${s.chain}`) };
+  // 2. data: one standardized query across every matching subgraph (skipped
+  // for a pure lending question, where pools would be money spent on nothing)
+  const lendingOnly = !!plan.lending && !plan.trade && /lend|borrow/.test(plan.intent) && (plan.pools.tokens?.length ?? 0) < 2;
+  let pools: Pool[] = [];
+  let sources: AnalystReport["sources"] = { ok: 0, total: 0, failed: [] };
+  if (!lendingOnly) {
+    const query: Record<string, string> = { sort: plan.pools.sort ?? "tvl", first: String(plan.pools.first ?? 10), min_tvl: String(plan.pools.minTvlUsd ?? 50_000) };
+    if (plan.pools.tokens?.length) query.tokens = plan.pools.tokens.join(",");
+    if (plan.pools.chains?.length) query.chains = plan.pools.chains.join(",");
+    if (plan.pools.protocols?.length) query.protocols = plan.pools.protocols.join(",");
+    const data = await paid("pools", poolsService, { path: "/pools", method: "GET", query, maxUnits: plan.pools.first });
+    const body = (data?.data ?? {}) as { pools?: Pool[]; sources?: { ok: boolean; protocol: string; chain: string }[] };
+    pools = Array.isArray(body.pools) ? body.pools : [];
+    const reports = Array.isArray(body.sources) ? body.sources : [];
+    sources = { ok: reports.filter((s) => s.ok).length, total: reports.length, failed: reports.filter((s) => !s.ok).map((s) => `${s.protocol}/${s.chain}`) };
+  }
+
+  // 2b. lending rates for the same token, from the standardized lending subgraphs
+  let markets: LendingMarket[] = [];
+  if (plan.lending && lendingService) {
+    const lq: Record<string, string> = { tokens: plan.lending.token, sort: plan.lending.side === "borrow" ? "borrow_apy" : "supply_apy", first: "8", min_tvl: "1000000" };
+    // narrow only to chains the user named: lending reaches chains the DEX list does not
+    if (plan.pools.chains?.length && plan.pools.chains.length < CHAIN_NAMES.length) lq.chains = plan.pools.chains.join(",");
+    const r = await paid("lending", lendingService, { path: "/markets", method: "GET", query: lq, maxUnits: 8 });
+    const lb = (r?.data ?? {}) as { markets?: LendingMarket[] };
+    markets = Array.isArray(lb.markets) ? lb.markets : [];
+  }
 
   // 3. act: an executable quote for the trade, on the deepest chain Uniswap's API serves
   let quote: QuoteSummary | null = null;
@@ -387,10 +457,12 @@ export async function analyze(question: string, opts: AnalystOptions): Promise<A
   }
 
   // 4. reason: prose around facts computed above
-  const facts = factsFor(plan, pools, quote, sources);
-  const table = pools.slice(0, 12).map((p) => `${p.protocol},${p.chain},${p.tokens.join("-")},fee ${p.fee_percent ?? "?"}%,tvl ${Math.round(p.tvl_usd)},vol24h ${p.volume_24h_usd ?? "?"},apr ${p.fee_apr_percent ?? "?"}%`).join("\n");
-  const prose = pools.length
-    ? await chat("answer", "You are a concise DeFi analyst. Use ONLY the facts and rows given. Never compute, convert or estimate a number that is not written in them: no USD conversions of your own, no guesses about slippage or prices. Name pools as protocol/chain pair fee. Give a direct answer, one recommendation and one risk, in under 140 words. No markdown tables.", `Question: ${q}\n\nFacts:\n- ${facts.join("\n- ")}\n\nRows (protocol,chain,pair,fee,tvl,vol24h,apr):\n${table}`, 500)
+  const facts = factsFor(plan, pools, quote, sources, markets);
+  const poolRows = pools.slice(0, 12).map((p) => `${p.protocol},${p.chain},${p.tokens.join("-")},fee ${p.fee_percent ?? "?"}%,tvl ${Math.round(p.tvl_usd)},vol24h ${p.volume_24h_usd ?? "?"},apr ${p.fee_apr_percent ?? "?"}%`).join("\n");
+  const marketRows = markets.map((m) => `${m.protocol},${m.chain},${m.token},supply ${m.supply_apy_percent ?? "?"}%,borrow ${m.borrow_apy_percent ?? "?"}%,deposits ${Math.round(m.deposits_usd)},utilization ${m.utilization_percent ?? "?"}%`).join("\n");
+  const table = [poolRows && `Pool rows (protocol,chain,pair,fee,tvl,vol24h,apr):\n${poolRows}`, marketRows && `Lending rows (protocol,chain,token,supply,borrow,deposits,utilization):\n${marketRows}`].filter(Boolean).join("\n\n");
+  const prose = pools.length || markets.length
+    ? await chat("answer", "You are a concise DeFi analyst. Use ONLY the facts and rows given. Never compute, convert or estimate a number that is not written in them: no USD conversions of your own, no guesses about slippage or prices. Name pools as protocol/chain pair fee and markets as protocol/chain. Give a direct answer, one recommendation and one risk, in under 140 words. No markdown tables.", `Question: ${q}\n\nFacts:\n- ${facts.join("\n- ")}\n\n${table}`, 500)
     : null;
 
   // the prompt asks for no invented numbers; this makes sure of it
@@ -400,7 +472,7 @@ export async function analyze(question: string, opts: AnalystOptions): Promise<A
   const totals: Record<string, number> = {};
   for (const s of spend) if (s.amount && s.currency) totals[s.currency] = (totals[s.currency] ?? 0) + Number(s.amount);
   return {
-    question: q, planner, plan, pools, sources, quote, facts,
+    question: q, planner, plan, pools, markets, sources, quote, facts,
     answer: answer ?? facts.join(" "), writer: answer ? "llm" : "facts", removed: grounded?.dropped ?? [],
     spend, skipped,
     totals: Object.fromEntries(Object.entries(totals).map(([c, v]) => [c, String(Number(v.toFixed(8)))])),
@@ -412,7 +484,7 @@ export function renderReport(r: AnalystReport): string {
   const lines = [
     r.answer, "",
     "Facts (computed from paid data):", ...r.facts.map((f) => `  • ${f}`), "",
-    `Plan (${r.planner}): ${JSON.stringify(r.plan.pools)}${r.plan.trade ? ` trade ${JSON.stringify(r.plan.trade)}` : ""}`,
+    `Plan (${r.planner}): ${JSON.stringify(r.plan.pools)}${r.plan.trade ? ` trade ${JSON.stringify(r.plan.trade)}` : ""}${r.plan.lending ? ` lending ${JSON.stringify(r.plan.lending)}` : ""}`,
     "",
     "Paid:",
     ...r.spend.map((s) => `  ${s.step.padEnd(7)} ${s.service.padEnd(14)} ${s.units ?? "-"} ${s.unit ?? ""} → ${s.amount ?? "free"} ${s.currency ?? ""}${s.tx ? `  tx ${s.tx}` : ""}`),

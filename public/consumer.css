@@ -706,3 +706,24 @@ body.mode-deployer .primary:hover { box-shadow: 0 4px 12px oklch(0.54 0.21 293 /
 .an-steps li.wait b::after { content: " …"; }
 .an-facts { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; color: var(--text-secondary); }
 @media (max-width: 600px) { .an-ask { flex-direction: column; } }
+
+/* ── onchain data recipes: coverage chips, compact data tables ─────────── */
+.src-strip { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+.src { font-size: 11.5px; padding: 2px 9px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--bg-inset); color: var(--text-secondary); white-space: nowrap; }
+.src.ok { border-color: color-mix(in oklch, var(--success) 45%, var(--border)); color: var(--text-primary); }
+.src.fb { border-color: color-mix(in oklch, var(--warning) 60%, var(--border)); color: var(--warning-ink); }
+.src.down { opacity: 0.55; }
+.srcs { margin-top: 8px; }
+.vtable td .sub { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+.vtable th.lead { color: var(--accent); }
+.vtable td.num, .vtable th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+textarea.gql { font-size: 12.5px; line-height: 1.5; min-height: 150px; }
+#r-preset .choice { text-align: left; }
+.an-markets { margin-top: 2px; }
+.an-build { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.an-swapbox { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; background: var(--bg-inset); display: grid; gap: 8px; }
+.an-swapbox.ok { border-color: color-mix(in oklch, var(--success) 45%, var(--border)); }
+.an-swaphead { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.an-swapsteps { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 12.5px; color: var(--text-secondary); }
+.an-tx { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; }
+.an-tx .mono { font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { extractJson, factsFor, groundProse, mergePlan, numbersIn, quoteRequest, rulePlan, summarizeQuote, type Plan } from "../src/graph/analyst.ts";
 import type { Pool } from "../src/graph/standard.ts";
+import type { LendingMarket } from "../src/graph/lending.ts";
 
 const pool = (over: Partial<Pool>): Pool => ({
   protocol: "uniswap-v3", chain: "ethereum", chain_id: 1, pool: "0xpool", name: null,
@@ -68,7 +69,7 @@ test("factsFor: deepest, best APR above the floor, thin-liquidity warning, faile
     pool({ protocol: "sushiswap", chain: "polygon", chain_id: 137, tvl_usd: 100_000, volume_24h_usd: 50_000, fee_percent: 0.3, fee_apr_percent: 547.5 }),
   ];
   const facts = factsFor(plan, pools, null, { ok: 3, total: 4, failed: ["uniswap-v3/base"] });
-  assert.match(facts[0], /3 pools from 3\/4 standardized subgraphs .* 3 chain\(s\); unavailable: uniswap-v3\/base/);
+  assert.match(facts[0], /3 pools from 3\/4 DEX subgraphs .* 3 chain\(s\); unavailable: uniswap-v3\/base/);
   assert.match(facts.join("\n"), /Deepest: uniswap-v3\/ethereum USDC-WETH 0\.05% with \$100\.00M TVL/);
   assert.match(facts.join("\n"), /Highest fee APR with TVL ≥ \$250\.0k: uniswap-v3\/ethereum .* 27\.38%/, "the 547% pool is below the TVL floor");
   assert.match(facts.join("\n"), /Caution: 1 pool\(s\) show >100% fee APR/);
@@ -124,4 +125,37 @@ test("a UniswapX quote is gasless and says so, without inventing a route or impa
   assert.match(line, /gasless UniswapX order \(DUTCH_V2\)/);
   assert.match(line, /about \$0\.0315 in gas/);
   assert.doesNotMatch(line, /n\/a|price impact/);
+});
+
+test("rulePlan: lending questions, and a lending comparison for stablecoin yield", () => {
+  const borrow = rulePlan("Where is it cheapest to borrow USDC?");
+  assert.deepEqual(borrow.lending, { token: "USDC", side: "borrow" });
+  assert.equal(borrow.intent, "lending");
+  const earn = rulePlan("Where can USDC earn the most fees against ETH?");
+  assert.deepEqual(earn.lending, { token: "USDC", side: "supply" });
+  assert.equal(earn.intent, "yield");
+  assert.equal(rulePlan("swap $5k USDC to ETH on base").lending, null);
+  const merged = mergePlan({ lending: { token: "eth", side: "borrow" } }, rulePlan("swap $5k USDC to ETH"));
+  assert.deepEqual(merged.lending, { token: "WETH", side: "borrow" });
+  assert.deepEqual(mergePlan({ lending: null }, earn).lending, { token: "USDC", side: "supply" }, "the model cannot drop lending the question asked for");
+  assert.equal(mergePlan({ lending: null }, rulePlan("swap $5k USDC to ETH")).lending, null);
+});
+
+test("factsFor composes lending with DEX yield, from the numbers alone", () => {
+  const plan: Plan = { intent: "yield", trade: null, lending: { token: "USDC", side: "supply" }, pools: { tokens: ["USDC", "WETH"], sort: "fee_apr", minTvlUsd: 250_000 } };
+  const pools = [pool({ tvl_usd: 50_000_000, fee_apr_percent: 12.5 })];
+  const mk = (over: Partial<LendingMarket>): LendingMarket => ({
+    protocol: "aave-v3", chain: "ethereum", chain_id: 1, market: "0xm", name: null, token: "USDC", token_address: "0xa0b8", token_decimals: 6, token_price_usd: 1,
+    supply_apy_percent: 3.52, borrow_apy_percent: 4.28, stable_borrow_apy_percent: null, tvl_usd: 2e9, deposits_usd: 2e9, borrows_usd: 1.83e9,
+    utilization_percent: 91.5, max_ltv_percent: 75, can_borrow: true, active: true, subgraph: "s", ...over,
+  });
+  const markets = [mk({}), mk({ protocol: "benqi", chain: "avalanche", supply_apy_percent: 9.11, deposits_usd: 500_000, utilization_percent: 50 })];
+  const facts = factsFor(plan, pools, null, { ok: 1, total: 1, failed: [] }, markets).join("\n");
+  assert.match(facts, /Best USDC supply rate with deposits ≥ \$1\.00M: aave-v3\/ethereum at 3\.52% APY/, "the 9.11% market is too small to count");
+  assert.match(facts, /12\.5% fee APR against 3\.52% for lending USDC on aave-v3\/ethereum, a difference of 8\.98 points/);
+  assert.match(facts, /1 of these markets are at least 90% borrowed/);
+  assert.doesNotMatch(facts, /Cheapest variable/, "borrow costs appear only when the question is about borrowing");
+  const lendingOnly = factsFor({ ...plan, intent: "lending", lending: { token: "USDC", side: "borrow" } }, [], null, { ok: 0, total: 0, failed: [] }, markets);
+  assert.doesNotMatch(lendingOnly.join("\n"), /pools from/, "no pool line when no pools were bought");
+  assert.match(lendingOnly.join("\n"), /Cheapest variable USDC borrow with deposits ≥ \$1\.00M: aave-v3\/ethereum at 4\.28% APY/);
 });

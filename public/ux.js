@@ -42,6 +42,8 @@ const ICONS = {
   repeat: '<path d="m17 2.5 3.5 3.5-3.5 3.5"/><path d="M3.5 11.5v-1a4 4 0 0 1 4-4h13"/><path d="m7 21.5-3.5-3.5L7 14.5"/><path d="M20.5 12.5v1a4 4 0 0 1-4 4h-13"/>',
   landmark: '<path d="M3 21.5h18M5.5 21.5V11M9.5 21.5V11M14.5 21.5V11M18.5 21.5V11"/><path d="M12 2.5 21 8.5H3Z"/>',
   package: '<path d="M20.5 8.2a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4a2 2 0 0 0-1 1.7v7.6a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.5 7.5 8.5 5 8.5-5M12 21.5v-9M7.7 4.8l8.6 5"/>',
+  percent: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  nodes: '<circle cx="5.5" cy="12" r="2.5"/><circle cx="18.5" cy="5.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/><path d="m7.8 10.9 8.4-4.2M7.8 13.1l8.4 4.2"/>',
   droplet: '<path d="M12 2.8s6.5 7 6.5 11.7a6.5 6.5 0 0 1-13 0C5.5 9.8 12 2.8 12 2.8Z"/><path d="M9 15a3 3 0 0 0 3 3"/>',
   grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
   sparkles: '<path d="M12 3l1.9 5.3a2 2 0 0 0 1.3 1.3L20.5 11.5l-5.3 1.9a2 2 0 0 0-1.3 1.3L12 20l-1.9-5.3a2 2 0 0 0-1.3-1.3L3.5 11.5l5.3-1.9a2 2 0 0 0 1.3-1.3Z"/>',
@@ -131,6 +133,8 @@ const CATS = {
   file_download: { label: "Files", icon: "package", hue: 28 },
   dex_liquidity: { label: "DEX Pools", icon: "droplet", hue: 290 },
   dex_quote: { label: "Swaps", icon: "repeat", hue: 330 },
+  lending_rates: { label: "Lending", icon: "percent", hue: 160 },
+  subgraph_query: { label: "Subgraphs", icon: "nodes", hue: 250 },
 };
 const ACRONYMS = { llm: "LLM", ai: "AI", api: "API", eth: "ETH", dao: "DAO", nft: "NFT", usd: "USD" };
 const prettyName = (s) => String(s ?? "").split(/[\s_-]+/).filter(Boolean).map((w) => ACRONYMS[w.toLowerCase()] ?? w[0].toUpperCase() + w.slice(1)).join(" ");

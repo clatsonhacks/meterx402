@@ -492,6 +492,30 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
       }
     }
+    // Build a Uniswap swap for the playground's EVM wallet: approval check,
+    // quote, Permit2 signature, calldata. Trading API calls are paid by the
+    // playground buyer; nothing is broadcast.
+    if (req.method === "POST" && url.pathname === "/playground/swap") {
+      const b = await readBody(req);
+      const signerKey = process.env.BUYER_EVM_PRIVATE_KEY;
+      if (!signerKey) return json(res, 200, { ok: false, error: "no EVM wallet: run scripts/new-chain-wallets.ts" });
+      const mx = await sdkBuyer().catch(() => null);
+      if (!mx) return json(res, 200, { ok: false, error: "no buyer wallet: set BUYER_ACCOUNT_ID/BUYER_PRIVATE_KEY in .env" });
+      const chainId = Number(b.chain_id), amount = String(b.amount ?? "");
+      if (!Number.isInteger(chainId) || !/^0x[0-9a-fA-F]{40}$/.test(String(b.token_in)) || !/^0x[0-9a-fA-F]{40}$/.test(String(b.token_out)) || !/^\d+$/.test(amount)) {
+        return json(res, 200, { ok: false, error: "need chain_id, token_in, token_out (addresses) and amount (atomic units)" });
+      }
+      try {
+        const { prepareSwap } = await import("./graph/swap.ts");
+        const prepared = await prepareSwap({
+          chain_id: chainId, token_in: String(b.token_in), token_out: String(b.token_out), amount,
+          decimals_in: b.decimals_in == null ? undefined : Number(b.decimals_in), decimals_out: b.decimals_out == null ? undefined : Number(b.decimals_out),
+        }, { buyer: mx, signerKey });
+        return json(res, 200, { ok: true, prepared });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
     if (req.method === "POST" && url.pathname === "/playground/pay") {
       const b = await readBody(req);
       const q = pendingQuotes.get(String(b.quote_id));

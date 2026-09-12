@@ -248,6 +248,167 @@ const RECIPES = [
   },
 ];
 
+// ── onchain data from The Graph ─────────────────────────────────────────
+const choiceRow = (id, opts, pressed = 0) =>
+  `<div class="choices" id="${id}">${opts.map(([v, l], i) => `<button type="button" class="choice" data-v="${esc(v)}" aria-pressed="${i === pressed}">${esc(l)}</button>`).join("")}</div>`;
+const pickedIn = (root, id, fallback = "") => root.querySelector(`#${id} .choice[aria-pressed="true"]`)?.dataset.v ?? fallback;
+function wireChoices(root, ids, onChange) {
+  for (const id of ids) root.querySelector(`#${id}`)?.querySelectorAll(".choice").forEach((b) => b.onclick = () => {
+    root.querySelector(`#${id}`).querySelectorAll(".choice").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+    onChange();
+  });
+}
+const usdCompact = (n) => (n == null ? "–" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}k` : `$${Math.round(n)}`);
+const pct = (n) => (n == null ? "–" : `${Number(n).toFixed(2)}%`);
+const CHAIN_CHOICES = [["", "All chains"], ["ethereum", "Ethereum"], ["arbitrum", "Arbitrum"], ["base", "Base"], ["optimism", "Optimism"], ["polygon", "Polygon"], ["bsc", "BSC"], ["avalanche", "Avalanche"]];
+
+/** Which subgraphs answered, which fell back, which were down. A paid answer
+ *  should show its own coverage rather than imply it saw every chain. */
+function sourcesStrip(sources) {
+  if (!Array.isArray(sources) || !sources.length) return "";
+  const ok = sources.filter((s) => s.ok && s.via !== "fallback"), fb = sources.filter((s) => s.via === "fallback"), down = sources.filter((s) => !s.ok);
+  const chip = (s, cls, title) => `<span class="src ${cls}" title="${esc(title)}">${esc(s.protocol)} · ${esc(s.chain)}</span>`;
+  return `<details class="adv srcs"><summary>${ok.length + fb.length} of ${sources.length} subgraphs answered${fb.length ? `, ${fb.length} through Uniswap's own subgraph` : ""}${down.length ? `, ${down.length} unavailable` : ""}</summary>
+    <div class="src-strip">${ok.map((s) => chip(s, "ok", `${s.rows} rows in ${s.ms} ms`)).join("")}${fb.map((s) => chip(s, "fb", `the standardized subgraph failed (${s.primary_error ?? ""}), so Uniswap's own answered`)).join("")}${down.map((s) => chip(s, "down", s.error ?? "unavailable")).join("")}</div>
+    <div class="sub">Green answered, amber answered through a fallback, grey was unavailable and is missing from the table.</div></details>`;
+}
+
+/** Rows with one level of nested objects spread into columns (token0.symbol). */
+function flatTable(rows) {
+  const flat = rows.slice(0, 50).map((r) => {
+    const out = {};
+    for (const [k, v] of Object.entries(r ?? {})) {
+      if (Array.isArray(v)) out[k] = `${v.length} item${v.length === 1 ? "" : "s"}`;
+      else if (v && typeof v === "object") { for (const [k2, v2] of Object.entries(v)) if (typeof v2 !== "object") out[`${k}.${k2}`] = v2; }
+      else out[k] = v;
+    }
+    return out;
+  });
+  const cols = [...new Set(flat.flatMap(Object.keys))].slice(0, 8);
+  return `<div class="tablewrap"><table class="vtable"><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>
+    ${flat.map((r) => `<tr>${cols.map((c) => `<td>${esc(String(r[c] ?? "")).slice(0, 48)}</td>`).join("")}</tr>`).join("")}
+  </tbody></table></div>${rows.length > 50 ? `<div class="sub">showing 50 of ${rows.length}</div>` : ""}`;
+}
+
+RECIPES.push({
+  id: "dex-pools",
+  cta: "Find pools",
+  working: "Asking every DEX subgraph at once…",
+  match: (d) => d.capabilities.includes("dex_liquidity") && /\/pools/.test(d.sample?.path ?? ""),
+  form: () => `
+    <div class="big">Which pair?</div>
+    ${choiceRow("r-pair", [["USDC,ETH", "USDC / ETH"], ["WBTC,ETH", "WBTC / ETH"], ["USDC,USDT", "USDC / USDT"], ["ETH", "Anything with ETH"]])}
+    <div class="big">Where?</div>
+    ${choiceRow("r-chain", CHAIN_CHOICES)}
+    <div class="big">Best by</div>
+    ${choiceRow("r-sort", [["tvl", "Deepest"], ["volume", "Busiest today"], ["fee_apr", "Highest fee APR"]])}
+    <div class="big">How many pools?</div>
+    ${choiceRow("r-n", [["5", "5"], ["10", "10"], ["20", "20"]], 1)}`,
+  bind: (root, onChange) => wireChoices(root, ["r-pair", "r-chain", "r-sort", "r-n"], onChange),
+  read: (root) => ({ tokens: pickedIn(root, "r-pair", "USDC,ETH"), chain: pickedIn(root, "r-chain"), sort: pickedIn(root, "r-sort", "tvl"), n: Number(pickedIn(root, "r-n", "10")) }),
+  build: (d, f) => {
+    // a fee APR on thin liquidity is noise, so that sort asks for deeper pools
+    const p = new URLSearchParams({ tokens: f.tokens, sort: f.sort, first: String(f.n), min_tvl: f.sort === "fee_apr" ? "250000" : "50000" });
+    if (f.chain) p.set("chains", f.chain);
+    return { method: "GET", path: `/pools?${p}`, body: "" };
+  },
+  estimateUnits: (d, f) => f.n,
+  render: (data) => {
+    const o = asObject(data);
+    if (!Array.isArray(o?.pools)) return autoRender(data);
+    if (!o.pools.length) return `<div class="notice">No pools matched. Nothing is charged for pools you did not get.</div>${sourcesStrip(o.sources)}`;
+    return `<div class="tablewrap"><table class="vtable"><thead><tr><th>Pool</th><th>Chain</th><th class="num">Fee</th><th class="num">TVL</th><th class="num">24h volume</th><th class="num">Fee APR</th></tr></thead><tbody>
+      ${o.pools.map((p) => `<tr><td><b>${esc(p.tokens.join(" / "))}</b><div class="sub">${esc(p.protocol)}</div></td><td>${esc(p.chain)}</td>
+        <td class="num">${pct(p.fee_percent)}</td><td class="num">${usdCompact(p.tvl_usd)}</td><td class="num">${usdCompact(p.volume_24h_usd)}</td><td class="num">${pct(p.fee_apr_percent)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="sub">Fee APR is 24h volume × fee over TVL, a signal rather than a promised yield.</div>${sourcesStrip(o.sources)}`;
+  },
+});
+
+RECIPES.push({
+  id: "lending",
+  cta: "Compare rates",
+  working: "Asking every lending subgraph at once…",
+  match: (d) => d.capabilities.includes("lending_rates") && /\/markets/.test(d.sample?.path ?? ""),
+  form: () => `
+    <div class="big">Which token?</div>
+    ${choiceRow("r-token", [["USDC", "USDC"], ["USDT", "USDT"], ["WETH", "ETH"], ["WBTC", "BTC"], ["DAI", "DAI"]])}
+    <div class="big">You want to</div>
+    ${choiceRow("r-side", [["supply_apy", "Earn on a deposit"], ["borrow_apy", "Borrow cheaply"], ["tvl", "See the biggest markets"]])}
+    <div class="big">Where?</div>
+    ${choiceRow("r-chain", CHAIN_CHOICES)}
+    <div class="big">How many markets?</div>
+    ${choiceRow("r-n", [["5", "5"], ["10", "10"], ["20", "20"]], 1)}`,
+  bind: (root, onChange) => wireChoices(root, ["r-token", "r-side", "r-chain", "r-n"], onChange),
+  read: (root) => ({ token: pickedIn(root, "r-token", "USDC"), sort: pickedIn(root, "r-side", "supply_apy"), chain: pickedIn(root, "r-chain"), n: Number(pickedIn(root, "r-n", "10")) }),
+  build: (d, f) => {
+    const p = new URLSearchParams({ tokens: f.token, sort: f.sort, first: String(f.n), min_tvl: "1000000" });
+    if (f.chain) p.set("chains", f.chain);
+    return { method: "GET", path: `/markets?${p}`, body: "" };
+  },
+  estimateUnits: (d, f) => f.n,
+  render: (data, { f }) => {
+    const o = asObject(data);
+    if (!Array.isArray(o?.markets)) return autoRender(data);
+    if (!o.markets.length) return `<div class="notice">No active markets matched. Nothing is charged for markets you did not get.</div>${sourcesStrip(o.sources)}`;
+    const lead = f?.sort === "borrow_apy" ? "borrow" : "supply";
+    return `<div class="tablewrap"><table class="vtable"><thead><tr><th>Market</th><th>Chain</th>
+        <th class="num${lead === "supply" ? " lead" : ""}">Supply APY</th><th class="num${lead === "borrow" ? " lead" : ""}">Borrow APY</th>
+        <th class="num">Deposits</th><th class="num">Borrowed</th><th class="num">Max LTV</th></tr></thead><tbody>
+      ${o.markets.map((m) => `<tr><td><b>${esc(m.token)}</b><div class="sub">${esc(m.protocol)}</div></td><td>${esc(m.chain)}</td>
+        <td class="num">${pct(m.supply_apy_percent)}</td><td class="num">${m.can_borrow ? pct(m.borrow_apy_percent) : "off"}</td>
+        <td class="num">${usdCompact(m.deposits_usd)}</td><td class="num">${m.utilization_percent == null ? "–" : `${Math.round(m.utilization_percent)}%`}</td>
+        <td class="num">${m.max_ltv_percent ? `${m.max_ltv_percent}%` : "–"}</td></tr>`).join("")}
+    </tbody></table></div>${sourcesStrip(o.sources)}`;
+  },
+});
+
+const SUBGRAPH_PRESETS = [
+  { label: "Uniswap v3 on Ethereum: top pools", id: "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
+    query: `{\n  pools(first: 5, orderBy: totalValueLockedUSD, orderDirection: desc, where: { totalValueLockedUSD_lt: "5000000000" }) {\n    id feeTier totalValueLockedUSD\n    token0 { symbol }\n    token1 { symbol }\n  }\n}` },
+  { label: "Uniswap v3 on Base: latest swaps", id: "43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG",
+    query: `{\n  swaps(first: 5, orderBy: timestamp, orderDirection: desc) {\n    timestamp amountUSD\n    token0 { symbol }\n    token1 { symbol }\n  }\n}` },
+  { label: "Aave v3 on Arbitrum: markets", id: "4xyasjQeREe7PxnF6wVdobZvCw5mhoHZq3T7guRpuNPf",
+    query: `{\n  markets(first: 5, orderBy: totalValueLockedUSD, orderDirection: desc) {\n    name totalValueLockedUSD\n    inputToken { symbol }\n  }\n}` },
+];
+
+RECIPES.push({
+  id: "subgraph",
+  cta: "Run the query",
+  working: "Querying The Graph…",
+  match: (d) => d.capabilities.includes("subgraph_query"),
+  form: () => `
+    <div class="big">Start from</div>
+    <div class="choices" id="r-preset">${SUBGRAPH_PRESETS.map((p, i) => `<button type="button" class="choice" data-i="${i}" aria-pressed="${i === 0}">${esc(p.label)}</button>`).join("")}</div>
+    <label class="big" for="r-sgid">Subgraph id <span class="hint">any of The Graph's 15,000+ subgraphs</span></label>
+    <input type="text" id="r-sgid" class="mono" value="${esc(SUBGRAPH_PRESETS[0].id)}" spellcheck="false">
+    <label class="big" for="r-gql">GraphQL <span class="hint">you pay per object in the answer; errors and empty answers are free</span></label>
+    <textarea id="r-gql" class="mono gql" rows="8" spellcheck="false">${esc(SUBGRAPH_PRESETS[0].query)}</textarea>`,
+  bind: (root, onChange) => {
+    root.querySelectorAll("#r-preset .choice").forEach((b) => b.onclick = () => {
+      root.querySelectorAll("#r-preset .choice").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+      const p = SUBGRAPH_PRESETS[Number(b.dataset.i)];
+      root.querySelector("#r-sgid").value = p.id;
+      root.querySelector("#r-gql").value = p.query;
+      onChange();
+    });
+    ["r-sgid", "r-gql"].forEach((id) => root.querySelector(`#${id}`)?.addEventListener("input", onChange));
+  },
+  read: (root) => ({ id: root.querySelector("#r-sgid")?.value.trim() || SUBGRAPH_PRESETS[0].id, query: root.querySelector("#r-gql")?.value || SUBGRAPH_PRESETS[0].query }),
+  build: (d, f) => ({ method: "POST", path: `/${/^Qm/.test(f.id) ? "deployments" : "subgraphs"}/${f.id}`, body: JSON.stringify({ query: f.query }) }),
+  // nested objects make the entity count unknowable up front; the quote is exact
+  estimateUnits: () => null,
+  render: (data) => {
+    const o = asObject(data);
+    if (o?.errors?.length && !o.data) return `<div class="notice bad"><b>The subgraph returned an error</b><div>${esc(o.errors[0]?.message ?? "")}</div><div class="sub">Zero entities came back, so nothing was charged.</div></div>`;
+    if (!o?.data) return autoRender(data);
+    const rows = largestArray(o.data);
+    return `<div class="ds-meta">${Number(o.entities ?? 0).toLocaleString()} entities</div>
+      ${Array.isArray(rows) && rows.length && typeof rows[0] === "object" ? flatTable(rows) : autoRender(o.data)}
+      <details class="adv"><summary>Raw JSON</summary><pre class="code respbox">${esc(JSON.stringify(o.data, null, 2).slice(0, 6000))}</pre></details>`;
+  },
+});
+
 /** A dataset: browse the columns, filter, and watch the price follow the rows.
  *  The schema is free, so the form can be built from the real columns before
  *  the buyer has paid for anything. */

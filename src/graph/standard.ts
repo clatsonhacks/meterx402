@@ -1,31 +1,48 @@
 // The Graph, standardized: one query across many DEXes on many chains.
 //
-// Every subgraph below implements Messari's DEX AMM schema, so the same
-// GraphQL document runs unchanged against Uniswap v3 on seven chains,
-// SushiSwap, PancakeSwap, Curve, Balancer, Camelot and Velodrome. The only
-// thing that varies per source is the subgraph id. Without the standard each
-// protocol would need its own query and its own field mapping (Uniswap's
+// The sources below implement Messari's DEX AMM schema, so the same GraphQL
+// document runs unchanged against Uniswap v3 on seven chains, SushiSwap,
+// PancakeSwap, Curve, Balancer, Camelot and Velodrome. The only thing that
+// varies per source is the subgraph id. Without the standard each protocol
+// would need its own query and its own field mapping (Uniswap's
 // `pools.feeTier`, Curve's `pools.fee`, Balancer's `swapFee`...); with it, a
 // "best pool for USDC/WETH anywhere" question is one fan-out and one sort.
 //
-// Ids come from messari/subgraphs deployment/deployment.json (status: prod,
-// services.decentralized-network.query-id).
+// When a standardized subgraph is failing (indexers behind, no allocations),
+// a Uniswap source falls back to Uniswap's own v3 subgraph for that chain.
+// That one speaks a different schema, so it has its own query and is mapped
+// into the same Pool shape, and the source report says so (`via: "fallback"`):
+// a hand-mapped schema is exactly the work the standard exists to remove.
+//
+// Ids: messari/subgraphs deployment/deployment.json (status prod,
+// decentralized-network query-id) and Uniswap's v3 subgraphs, each checked
+// against The Graph gateway before it went in.
+
+export type SchemaKind = "messari" | "uniswap-v3-official";
 
 export interface Source {
   protocol: string;
   chain: string;
   chainId: number;
   id: string;
+  /** Default: Messari's standardized schema. */
+  kind?: SchemaKind;
+  /** Asked only when this source fails. */
+  fallback?: Source;
 }
 
+const uniswapOwn = (chain: string, chainId: number, id: string): Source => ({ protocol: "uniswap-v3", chain, chainId, id, kind: "uniswap-v3-official" });
+
 export const DEX_SOURCES: Source[] = [
-  { protocol: "uniswap-v3", chain: "ethereum", chainId: 1, id: "4cKy6QQMc5tpfdx8yxfYeb9TLZmgLQe44ddW1G7NwkA6" },
-  { protocol: "uniswap-v3", chain: "arbitrum", chainId: 42161, id: "FQ6JYszEKApsBpAmiHesRsd9Ygc6mzmpNRANeVQFYoVX" },
-  { protocol: "uniswap-v3", chain: "base", chainId: 8453, id: "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS" },
-  { protocol: "uniswap-v3", chain: "optimism", chainId: 10, id: "EgnS9YE1avupkvCNj9fHnJxppfEmNNywYJtghqiu2pd9" },
-  { protocol: "uniswap-v3", chain: "polygon", chainId: 137, id: "BvYimJ6vCLkk63oWZy7WB5cVDTVVMugUAF35RAUZpQXE" },
-  { protocol: "uniswap-v3", chain: "bsc", chainId: 56, id: "8f1KyiuNYiNGrjagzEVpf6k6KkPG517prtjdrJihgHw" },
+  { protocol: "uniswap-v3", chain: "ethereum", chainId: 1, id: "4cKy6QQMc5tpfdx8yxfYeb9TLZmgLQe44ddW1G7NwkA6", fallback: uniswapOwn("ethereum", 1, "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV") },
+  { protocol: "uniswap-v3", chain: "arbitrum", chainId: 42161, id: "FQ6JYszEKApsBpAmiHesRsd9Ygc6mzmpNRANeVQFYoVX", fallback: uniswapOwn("arbitrum", 42161, "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM") },
+  { protocol: "uniswap-v3", chain: "base", chainId: 8453, id: "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS", fallback: uniswapOwn("base", 8453, "43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG") },
+  { protocol: "uniswap-v3", chain: "optimism", chainId: 10, id: "EgnS9YE1avupkvCNj9fHnJxppfEmNNywYJtghqiu2pd9", fallback: uniswapOwn("optimism", 10, "Cghf4LfVqPiFw6fp6Y5X5Ubc8UpmUhSfJL82zwiBFLaj") },
+  { protocol: "uniswap-v3", chain: "polygon", chainId: 137, id: "BvYimJ6vCLkk63oWZy7WB5cVDTVVMugUAF35RAUZpQXE", fallback: uniswapOwn("polygon", 137, "3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm") },
+  { protocol: "uniswap-v3", chain: "bsc", chainId: 56, id: "8f1KyiuNYiNGrjagzEVpf6k6KkPG517prtjdrJihgHw", fallback: uniswapOwn("bsc", 56, "F85MNzUGYqgSHSHRGgeVMNsdnW1KtZSVgFULumXRZTw2") },
   { protocol: "uniswap-v3", chain: "celo", chainId: 42220, id: "8cLf29KxAedWLVaEqjV8qKomdwwXQxjptBZFrqWNH5u2" },
+  // no standardized deployment here: Uniswap's own subgraph, mapped
+  uniswapOwn("avalanche", 43114, "GVH9h9KZ9CqheUEL93qMbq7QwgoBu32QXQDPR6bev4Eo"),
   { protocol: "sushiswap", chain: "ethereum", chainId: 1, id: "77jZ9KWeyi3CJ96zkkj5s1CojKPHt6XJKjLFzsDCd8Fd" },
   { protocol: "sushiswap", chain: "arbitrum", chainId: 42161, id: "9tSS5FaePZnjmnXnSKCCqKVLAqA6eGg6jA2oRojsXUbP" },
   { protocol: "sushiswap", chain: "polygon", chainId: 137, id: "B3Jt84tHJJjanE4W1YijyksTwtm7jqK8KcG5dcoc1ZNF" },
@@ -36,7 +53,7 @@ export const DEX_SOURCES: Source[] = [
   { protocol: "velodrome-v2", chain: "optimism", chainId: 10, id: "A4Y1A82YhSLTn998BVVELC8eWzhi992k4ZitByvssxqA" },
 ];
 
-/** The one document every source answers. Only standard-schema fields. */
+/** The one document every standardized source answers. Only standard-schema fields. */
 export const POOLS_QUERY = `query Pools($first: Int!, $minTvl: BigDecimal!, $symbols: [String!]!, $filter: Boolean!) {
   protocol: dexAmmProtocols(first: 1) { name slug network schemaVersion }
   all: liquidityPools(first: $first, orderBy: totalValueLockedUSD, orderDirection: desc, where: { totalValueLockedUSD_gte: $minTvl }) @skip(if: $filter) { ...P }
@@ -49,6 +66,19 @@ fragment P on LiquidityPool {
   dailySnapshots(first: 1, orderBy: timestamp, orderDirection: desc) { dailyVolumeUSD timestamp }
 }`;
 
+/** Uniswap's own v3 schema. It cannot filter by token symbol cheaply (nested
+ *  filters time out and `or` cannot sit beside column filters), so it returns
+ *  the top pools by TVL and the token check happens in code. */
+export const UNISWAP_V3_POOLS_QUERY = `query Pools($first: Int!, $minTvl: BigDecimal!) {
+  bundle(id: "1") { ethPriceUSD }
+  pools(first: $first, orderBy: totalValueLockedUSD, orderDirection: desc, where: { totalValueLockedUSD_gte: $minTvl, totalValueLockedUSD_lt: "5000000000" }) {
+    id feeTier totalValueLockedUSD
+    token0 { id symbol decimals derivedETH }
+    token1 { id symbol decimals derivedETH }
+    poolDayData(first: 1, orderBy: date, orderDirection: desc) { date volumeUSD }
+  }
+}`;
+
 /** Symbols people type, and what tokens actually call themselves onchain. */
 const ALIASES: Record<string, string[]> = {
   ETH: ["WETH", "ETH"],
@@ -58,6 +88,7 @@ const ALIASES: Record<string, string[]> = {
   USD: ["USDC", "USDC.E", "USDBC", "USDT", "DAI"],
   MATIC: ["WMATIC", "MATIC", "POL", "WPOL"],
   BNB: ["WBNB", "BNB"],
+  AVAX: ["WAVAX", "AVAX"],
 };
 export const expandSymbol = (s: string): string[] => ALIASES[s.toUpperCase()] ?? [s.toUpperCase()];
 
@@ -96,8 +127,13 @@ export interface SourceReport {
   subgraph: string;
   ok: boolean;
   ms: number;
-  pools: number;
+  rows: number;
+  /** "messari" (standardized) or the protocol's own schema, mapped. */
+  schema: SchemaKind;
   schema_version?: string;
+  /** "fallback" when the standardized subgraph failed and the protocol's own answered. */
+  via?: "fallback";
+  primary_error?: string;
   error?: string;
 }
 
@@ -107,71 +143,101 @@ export interface PoolsResult {
   sources: SourceReport[];
 }
 
+/** Query string or JSON body → a list, accepting "USDC/ETH" and "a,b". */
+export const listParam = (v: unknown): string[] =>
+  (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(/[,/]/) : []).map((x) => x.trim()).filter(Boolean);
+export const numParam = (v: unknown): number | undefined => (v == null || v === "" || !Number.isFinite(Number(v)) ? undefined : Number(v));
+
 /** Query string or JSON body → PoolQuery. Accepts "USDC/ETH" as a pair. */
 export function parsePoolQuery(p: Record<string, unknown>): PoolQuery {
-  const list = (v: unknown) =>
-    (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(/[,/]/) : []).map((x) => x.trim()).filter(Boolean);
-  const n = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? undefined : Number(v));
   const sort = String(p.sort ?? "tvl");
   return {
-    chains: list(p.chains ?? p.chain),
-    protocols: list(p.protocols ?? p.protocol),
-    tokens: list(p.tokens ?? p.token ?? p.pair),
-    minTvlUsd: n(p.min_tvl ?? p.minTvlUsd),
-    first: n(p.first ?? p.limit),
+    chains: listParam(p.chains ?? p.chain),
+    protocols: listParam(p.protocols ?? p.protocol),
+    tokens: listParam(p.tokens ?? p.token ?? p.pair),
+    minTvlUsd: numParam(p.min_tvl ?? p.minTvlUsd),
+    first: numParam(p.first ?? p.limit),
     sort: (["tvl", "volume", "fee_apr"].includes(sort) ? sort : "tvl") as PoolQuery["sort"],
   };
 }
 
-export function pickSources(q: Pick<PoolQuery, "chains" | "protocols">, all = DEX_SOURCES): Source[] {
+export function pickSources(q: { chains?: string[]; protocols?: string[] }, all = DEX_SOURCES): Source[] {
   const want = (list: string[] | undefined, v: string) => !list?.length || list.some((x) => v.toLowerCase().startsWith(x.toLowerCase()));
   return all.filter((s) => want(q.chains, s.chain) && want(q.protocols, s.protocol));
 }
 
-const num = (v: unknown): number => {
+export const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+export const round = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
 
-/** One subgraph's answer → rows in the shared shape. Pure, so it is tested. */
-export function normalize(source: Source, data: any, tokens: string[] = [], now = Date.now()): Pool[] {
-  const raw: any[] = data?.matching ?? data?.all ?? [];
-  const wanted = tokens.map(expandSymbol);
-  return raw
-    .map((p): Pool => {
-      const symbols = (p.inputTokens ?? []).map((t: any) => String(t.symbol ?? "?"));
-      const tvl = num(p.totalValueLockedUSD);
-      const snap = p.dailySnapshots?.[0];
-      // a snapshot older than two days says nothing about "today"
-      const fresh = snap && now / 1000 - num(snap.timestamp) < 2 * 86400;
-      const volume = fresh ? num(snap.dailyVolumeUSD) : null;
-      const trading = (p.fees ?? []).find((f: any) => f.feeType === "FIXED_TRADING_FEE" || f.feeType === "DYNAMIC_TRADING_FEE");
-      const fee = trading?.feePercentage != null ? num(trading.feePercentage) : null;
-      const apr = volume != null && fee != null && tvl > 0 ? (volume * (fee / 100) * 365 * 100) / tvl : null;
-      return {
-        protocol: source.protocol,
-        chain: source.chain,
-        chain_id: source.chainId,
-        pool: String(p.id),
-        name: p.name ?? null,
-        tokens: symbols,
-        token_addresses: (p.inputTokens ?? []).map((t: any) => String(t.id)),
-        token_decimals: (p.inputTokens ?? []).map((t: any) => Number(t.decimals ?? 18)),
-        token_prices_usd: (p.inputTokens ?? []).map((t: any) => (t.lastPriceUSD == null ? null : num(t.lastPriceUSD))),
-        tvl_usd: round(tvl, 2),
-        volume_24h_usd: volume == null ? null : round(volume, 2),
-        fee_percent: fee,
-        fee_apr_percent: apr == null ? null : round(apr, 2),
-        subgraph: source.id,
-      };
-    })
-    // a pool "worth" more than $5B is a mispriced meme token, not liquidity
-    .filter((p) => p.tvl_usd <= MAX_SANE_TVL && wanted.every((alts) => p.tokens.some((s) => alts.includes(s.toUpperCase()))));
+/** A pool "worth" more than $5B is a mispriced meme token, not liquidity. */
+const MAX_SANE_TVL = 5e9;
+const TWO_DAYS = 2 * 86400;
+
+function poolRow(source: Source, p: {
+  id: unknown; name: string | null; tokens: any[]; prices: (number | null)[];
+  tvl: number; volume: number | null; fee: number | null;
+}): Pool {
+  const apr = p.volume != null && p.fee != null && p.tvl > 0 ? (p.volume * (p.fee / 100) * 365 * 100) / p.tvl : null;
+  return {
+    protocol: source.protocol,
+    chain: source.chain,
+    chain_id: source.chainId,
+    pool: String(p.id),
+    name: p.name,
+    tokens: p.tokens.map((t) => String(t.symbol ?? "?")),
+    token_addresses: p.tokens.map((t) => String(t.id)),
+    token_decimals: p.tokens.map((t) => Number(t.decimals ?? 18)),
+    token_prices_usd: p.prices,
+    tvl_usd: round(p.tvl, 2),
+    volume_24h_usd: p.volume == null ? null : round(p.volume, 2),
+    fee_percent: p.fee,
+    fee_apr_percent: apr == null ? null : round(apr, 2),
+    subgraph: source.id,
+  };
 }
 
-const MAX_SANE_TVL = 5e9;
+const keepPools = (pools: Pool[], tokens: string[]) => {
+  const wanted = tokens.map(expandSymbol);
+  return pools.filter((p) => p.tvl_usd <= MAX_SANE_TVL && wanted.every((alts) => p.tokens.some((s) => alts.includes(s.toUpperCase()))));
+};
 
-const round = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
+/** A standardized subgraph's answer → rows in the shared shape. Pure, so it is tested. */
+export function normalize(source: Source, data: any, tokens: string[] = [], now = Date.now()): Pool[] {
+  const raw: any[] = data?.matching ?? data?.all ?? [];
+  return keepPools(raw.map((p) => {
+    const snap = p.dailySnapshots?.[0];
+    // a snapshot older than two days says nothing about "today"
+    const fresh = snap && now / 1000 - num(snap.timestamp) < TWO_DAYS;
+    const trading = (p.fees ?? []).find((f: any) => f.feeType === "FIXED_TRADING_FEE" || f.feeType === "DYNAMIC_TRADING_FEE");
+    const inputs = p.inputTokens ?? [];
+    return poolRow(source, {
+      id: p.id, name: p.name ?? null, tokens: inputs,
+      prices: inputs.map((t: any) => (t.lastPriceUSD == null ? null : num(t.lastPriceUSD))),
+      tvl: num(p.totalValueLockedUSD), volume: fresh ? num(snap.dailyVolumeUSD) : null,
+      fee: trading?.feePercentage != null ? num(trading.feePercentage) : null,
+    });
+  }), tokens);
+}
+
+/** Uniswap's own v3 subgraph → the same shape: feeTier is in hundredths of a
+ *  basis point, prices are in ETH and converted with the subgraph's bundle. */
+export function normalizeUniswapV3(source: Source, data: any, tokens: string[] = [], now = Date.now()): Pool[] {
+  const native = num(data?.bundle?.ethPriceUSD);
+  return keepPools((data?.pools ?? []).map((p: any) => {
+    const pair = [p.token0 ?? {}, p.token1 ?? {}];
+    const day = p.poolDayData?.[0];
+    const fresh = day && now / 1000 - num(day.date) < TWO_DAYS;
+    const fee = p.feeTier == null ? null : num(p.feeTier) / 10_000;
+    return poolRow(source, {
+      id: p.id, name: `${pair[0].symbol ?? "?"}/${pair[1].symbol ?? "?"}${fee != null ? ` ${fee}%` : ""}`, tokens: pair,
+      prices: pair.map((t) => (native > 0 && t.derivedETH != null ? round(num(t.derivedETH) * native, 6) : null)),
+      tvl: num(p.totalValueLockedUSD), volume: fresh ? num(day.volumeUSD) : null, fee,
+    });
+  }), tokens);
+}
 
 export function sortPools(pools: Pool[], sort: PoolQuery["sort"] = "tvl"): Pool[] {
   const key = (p: Pool) => (sort === "volume" ? p.volume_24h_usd ?? -1 : sort === "fee_apr" ? p.fee_apr_percent ?? -1 : p.tvl_usd);
@@ -192,11 +258,11 @@ const cache = new Map<string, { at: number; value: { data: any; report: SourceRe
 const health = new Map<string, { failures: number; until: number }>();
 export const resetSourceHealth = () => { health.clear(); cache.clear(); };
 
-async function querySource(source: Source, vars: Record<string, unknown>, opts: GraphOptions) {
-  const key = `${source.id}:${JSON.stringify(vars)}`;
+async function querySource(source: Source, document: string, vars: Record<string, unknown>, opts: GraphOptions): Promise<{ data: any; report: SourceReport }> {
+  const key = `${source.id}:${document.length}:${document.slice(0, 48)}:${JSON.stringify(vars)}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < (opts.cacheMs ?? 60_000)) return hit.value;
-  const report: SourceReport = { protocol: source.protocol, chain: source.chain, subgraph: source.id, ok: false, ms: 0, pools: 0 };
+  if (hit && Date.now() - hit.at < (opts.cacheMs ?? 60_000)) return { data: hit.value.data, report: { ...hit.value.report } };
+  const report: SourceReport = { protocol: source.protocol, chain: source.chain, subgraph: source.id, ok: false, ms: 0, rows: 0, schema: source.kind ?? "messari" };
   const sick = health.get(source.id);
   if (sick && Date.now() < sick.until) {
     report.error = `resting after ${sick.failures} failures, retry in ${Math.ceil((sick.until - Date.now()) / 1000)}s`;
@@ -215,7 +281,7 @@ async function querySource(source: Source, vars: Record<string, unknown>, opts: 
     const r = await (opts.fetch ?? fetch)(url, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${opts.apiKey}` },
-      body: JSON.stringify({ query: POOLS_QUERY, variables: vars }),
+      body: JSON.stringify({ query: document, variables: vars }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 12_000),
     });
     const j: any = await r.json().catch(() => ({}));
@@ -224,37 +290,56 @@ async function querySource(source: Source, vars: Record<string, unknown>, opts: 
     health.delete(source.id);
     report.ok = true;
     report.schema_version = j.data?.protocol?.[0]?.schemaVersion;
-    const value = { data: j.data, report };
-    cache.set(key, { at: Date.now(), value });
-    return value;
+    cache.set(key, { at: Date.now(), value: { data: j.data, report: { ...report } } });
+    return { data: j.data, report };
   } catch (e) {
     report.ms = Date.now() - started;
     return fail(String((e as Error)?.message ?? e));
   }
 }
 
-/** Ask every matching standardized subgraph the same question, in parallel. */
+export interface SourcePlan<T> {
+  document: string;
+  vars: Record<string, unknown>;
+  normalize: (data: any) => T[];
+}
+
+/** Ask every source its question in parallel; a failing source with a
+ *  fallback asks that instead. One report per source, successes and failures alike. */
+export async function fanOut<T>(sources: Source[], plan: (s: Source) => SourcePlan<T>, opts: GraphOptions): Promise<{ rows: T[]; sources: SourceReport[] }> {
+  const results = await Promise.all(sources.map(async (s) => {
+    const p = plan(s);
+    const first = await querySource(s, p.document, p.vars, opts);
+    if (first.data) {
+      const rows = p.normalize(first.data);
+      return { rows, report: { ...first.report, rows: rows.length } };
+    }
+    if (!s.fallback) return { rows: [] as T[], report: first.report };
+    const fp = plan(s.fallback);
+    const second = await querySource(s.fallback, fp.document, fp.vars, opts);
+    if (!second.data) return { rows: [] as T[], report: { ...first.report, error: `${first.report.error}; fallback: ${second.report.error}` } };
+    const rows = fp.normalize(second.data);
+    return {
+      rows,
+      report: { ...second.report, protocol: s.protocol, chain: s.chain, rows: rows.length, via: "fallback" as const, primary_error: first.report.error, ms: first.report.ms + second.report.ms },
+    };
+  }));
+  return { rows: results.flatMap((r) => r.rows), sources: results.map((r) => r.report) };
+}
+
+/** Ask every matching DEX subgraph the same question, in parallel. */
 export async function queryPools(q: PoolQuery, opts: GraphOptions): Promise<PoolsResult> {
   const first = Math.max(1, Math.min(200, Math.floor(q.first ?? 20)));
   const sort = q.sort ?? "tvl";
   const tokens = (q.tokens ?? []).filter(Boolean);
   const symbols = [...new Set(tokens.flatMap(expandSymbol))];
+  const minTvl = String(q.minTvlUsd ?? 10_000);
   // with a token filter the server narrows to pools holding ANY of them; the
   // "all of them" check happens in normalize, so over-fetch a little
-  const perSource = Math.min(100, tokens.length > 1 ? first * 4 : first);
-  const vars = { first: perSource, minTvl: String(q.minTvlUsd ?? 10_000), symbols: symbols.length ? symbols : [""], filter: symbols.length > 0 };
-  const sources = pickSources(q);
-  const answers = await Promise.all(sources.map((s) => querySource(s, vars, opts)));
-  const pools: Pool[] = [];
-  answers.forEach(({ data, report }, i) => {
-    if (!data) return;
-    const rows = normalize(sources[i], data, tokens);
-    report.pools = rows.length;
-    pools.push(...rows);
-  });
-  return {
-    query: { ...q, first, sort, tokens },
-    pools: sortPools(pools, sort).slice(0, first),
-    sources: answers.map((a) => a.report),
-  };
+  const standardVars = { first: Math.min(100, tokens.length > 1 ? first * 4 : first), minTvl, symbols: symbols.length ? symbols : [""], filter: symbols.length > 0 };
+  const ownVars = { first: 100, minTvl };
+  const { rows, sources } = await fanOut<Pool>(pickSources(q), (s) => s.kind === "uniswap-v3-official"
+    ? { document: UNISWAP_V3_POOLS_QUERY, vars: ownVars, normalize: (d) => normalizeUniswapV3(s, d, tokens) }
+    : { document: POOLS_QUERY, vars: standardVars, normalize: (d) => normalize(s, d, tokens) }, opts);
+  return { query: { ...q, first, sort, tokens }, pools: sortPools(rows, sort).slice(0, first), sources };
 }
