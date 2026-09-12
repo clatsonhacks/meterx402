@@ -63,7 +63,7 @@ $("sell-open").onclick = () => {
   const open = $("sell-body").hidden;
   $("sell-body").hidden = !open;
   $("sell-open").setAttribute("aria-expanded", String(open));
-  $("sell-open").textContent = open ? "Close" : "＋ Sell an API";
+  $("sell-open").innerHTML = open ? "Close" : `${icon("plus")} Sell an API`;
   if (open) sellStep(1);
 };
 
@@ -194,7 +194,7 @@ $("pub-go").onclick = async () => {
   for (const s of [1, 2, 3]) $(`ss-${s}`).hidden = true;
   $("stepper").querySelectorAll("li").forEach((li) => (li.className = "done"));
   $("ss-done").hidden = false;
-  $("ss-done").innerHTML = `<div class="done-ic">🎉</div>
+  $("ss-done").innerHTML = `<div class="done-ic">${icon("check")}</div>
     <h3>${esc(d.title || prettyName(d.name))} is live</h3>
     <p class="label">Buyers and AI agents can find it, get a price, and pay per use. Payments settle straight to ${esc(d.owner.account)}.</p>
     <div class="kv">

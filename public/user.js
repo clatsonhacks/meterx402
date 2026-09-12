@@ -46,8 +46,8 @@ function renderExplore() {
   for (const l of M.services) { const k = catKey(l.descriptor); counts.set(k, (counts.get(k) ?? 0) + 1); }
   if (M.cap !== "all" && !counts.has(M.cap)) M.cap = "all";
   const cats = [...counts.keys()].sort();
-  $("mkt-caps").innerHTML = [["all", { label: "Everything", icon: "✦" }], ...cats.map((k) => [k, CATS[k] ?? { label: prettyName(k), icon: "🧩" }])]
-    .map(([k, c]) => `<button class="cat" data-cap="${esc(k)}" aria-pressed="${M.cap === k}"><span class="ci">${c.icon}</span>${esc(c.label)}${k === "all" ? "" : ` <small>${counts.get(k)}</small>`}</button>`).join("");
+  $("mkt-caps").innerHTML = [["all", { label: "Everything", icon: "sparkles" }], ...cats.map((k) => [k, CATS[k] ?? { label: prettyName(k), icon: "grid" }])]
+    .map(([k, c]) => `<button class="cat" data-cap="${esc(k)}" aria-pressed="${M.cap === k}">${icon(c.icon, "ci")}${esc(c.label)}${k === "all" ? "" : ` <small>${counts.get(k)}</small>`}</button>`).join("");
   $("mkt-caps").querySelectorAll("button").forEach((b) => b.onclick = () => { M.cap = b.dataset.cap; renderExplore(); });
 
   const live = M.services.filter((l) => l.live).length;
@@ -88,7 +88,7 @@ function cardHtml(l) {
       <div class="p-sub">${typical != null ? `Typical use ${hbar(typical)}${cents ? ` · ${cents}` : ""}` : worst != null ? `Never more than ${hbar(worst)} a use` : "priced by usage"}</div>
     </div>
     <div class="foot">
-      <div class="feats">${d.payment.streaming ? `<span class="feat">⚡ Streams live</span>` : ""}${l.reputation.stats.paid_calls ? `<span class="feat">${l.reputation.stats.paid_calls} paid use${l.reputation.stats.paid_calls === 1 ? "" : "s"}</span>` : ""}</div>
+      <div class="feats">${d.payment.streaming ? `<span class="feat">${icon("zap")} Streams live</span>` : ""}${l.reputation.stats.paid_calls ? `<span class="feat">${l.reputation.stats.paid_calls} paid use${l.reputation.stats.paid_calls === 1 ? "" : "s"}</span>` : ""}</div>
       <div class="actions">${l.live ? `<button class="primary">Try it</button>` : `<button class="ghost" data-act="about">Details</button>`}</div>
     </div>
   </article>`;
@@ -424,7 +424,7 @@ function renderActivity() {
     const label = day(r.settled_at);
     if (label !== last) { html += `<div class="act-day">${esc(label)}</div>`; last = label; }
     html += `<div class="act-row"${d ? ` data-open="${esc(r.service_id)}"` : ""}>
-      ${d ? avatar(d) : `<div class="avatar cat" style="--h:220">🧩</div>`}
+      ${d ? avatar(d) : `<div class="avatar cat" style="--h:220">${icon("grid")}</div>`}
       <div class="ar-mid"><b>${esc(d ? titleOf(d) : r.service_id)}</b><span>${esc(d ? units(d.pricing, r.metered_units) : `${r.metered_units} ${r.unit}`)} · ${ago(r.settled_at)}</span></div>
       <div class="ar-amt"><b>${fmt(r.amount)} ${esc(r.currency)}</b>${usdOf(r.amount) != null ? `<span class="usd">≈ ${usdText(usdOf(r.amount))}</span>` : ""}</div>
       <div class="ar-proof">${r.transaction_id ? `<a href="${esc(hashscanTx(r.transaction_id))}" target="_blank" rel="noopener" title="View on HashScan">↗</a>` : `<span class="badge">tab</span>`}</div>
