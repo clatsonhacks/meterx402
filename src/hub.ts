@@ -78,6 +78,18 @@ function evidence(ev: MXEvent) {
   if (ev.type === "dispute" && typeof ev.data?.quote_id === "string") disputed.add(ev.data.quote_id);
 }
 
+let fx: { usd: number | null; at: number; source: string } = { usd: null, at: 0, source: "coingecko" };
+async function hbarUsd() {
+  if (OFFLINE || replayFile) return { usd: null, source: "offline" };
+  if (Date.now() - fx.at < 10 * 60_000) return fx;
+  try {
+    const j = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=hedera-hashgraph&vs_currencies=usd", { signal: AbortSignal.timeout(3000) }).then((r) => r.json());
+    const usd = Number(j?.["hedera-hashgraph"]?.usd);
+    fx = { usd: Number.isFinite(usd) && usd > 0 ? usd : null, at: Date.now(), source: "coingecko" };
+  } catch { fx = { ...fx, at: Date.now() - 9 * 60_000 }; } // retry in a minute
+  return fx;
+}
+
 const typicalCharge = (id: string) => {
   const e = registry.get(id);
   if (!e) return null;
@@ -242,7 +254,9 @@ const probeReq = (b: any) => ({
   headers: b.headers ?? {},
   query: b.query ?? {},
 });
-const trim = (x: unknown) => (typeof x === "string" ? x.slice(0, 20000) : JSON.stringify(x ?? null).length > 20000 ? JSON.stringify(x).slice(0, 20000) + "…" : x);
+// responses shown in the (loopback-only) UI: generous, but bounded
+const TRIM = 250_000;
+const trim = (x: unknown) => (typeof x === "string" ? x.slice(0, TRIM) : JSON.stringify(x ?? null).length > TRIM ? JSON.stringify(x).slice(0, TRIM) + "…" : x);
 
 // One tab per lane for the dashboard's streaming demo. Opening a tab approves a
 // real HBAR allowance, so it is done once and reused until it is exhausted.
@@ -338,7 +352,7 @@ const server = createServer(async (req, res) => {
           upstream: r.upstream, wallet, sample: r.sample, method: r.method, body: r.body, headers: r.headers, query: r.query,
           meter: b.meter || undefined, rate: b.rate || undefined, per: b.per ? Number(b.per) : undefined, maxUnits: b.maxUnits ? Number(b.maxUnits) : undefined,
           name: b.name || undefined, capabilities: Array.isArray(b.capabilities) && b.capabilities.length ? b.capabilities : undefined,
-          description: b.description || undefined, port, registry: SELF, facilitator: process.env.FACILITATOR_URL, quiet: true, tab,
+          description: b.description || undefined, title: b.title || undefined, unitLabel: b.unitLabel || undefined, port, registry: SELF, facilitator: process.env.FACILITATOR_URL, quiet: true, tab,
         });
         published.set(svc.descriptor.service_id, { url: svc.url, startedAt: Date.now(), close: svc.close });
         return json(res, 200, { ok: true, descriptor: svc.descriptor, detected: svc.detected, tabs: !!tab });
@@ -623,6 +637,22 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return json(res, 200, { ok: false, error: String(e).split("\n")[0] });
       }
+    }
+    // HBAR in dollars, for people. Cached; null when offline or unreachable
+    // (the UI then shows HBAR only rather than guess).
+    if (url.pathname === "/fx") return json(res, 200, await hbarUsd());
+    // The wallet the UI's User mode pays from: the hub's demo buyer (testnet).
+    if (url.pathname === "/me") {
+      if (!isLocal(req)) return json(res, 403, { ok: false, error: "loopback only" });
+      const c = await creds().catch(() => null);
+      if (!c) return json(res, 200, { ok: false, mode: OFFLINE ? "offline" : "live", error: "no buyer wallet: set BUYER_ACCOUNT_ID/BUYER_PRIVATE_KEY in .env" });
+      const a = OFFLINE ? null : await lookupAccount(c.accountId).catch(() => null);
+      return json(res, 200, {
+        ok: true, account: c.accountId, mode: OFFLINE ? "offline" : "live", network: "hedera:testnet",
+        balance: a?.balance ?? null,
+        hashscan: OFFLINE ? null : `https://hashscan.io/testnet/account/${c.accountId}`,
+        caps: { perCall: process.env.BUYER_MAX_PER_CALL ?? null, budget: process.env.BUYER_BUDGET ?? null },
+      });
     }
     if (url.pathname === "/balance") {
       const acct = url.searchParams.get("account");

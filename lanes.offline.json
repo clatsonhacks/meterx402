@@ -4,6 +4,7 @@
   "lanes": [
     {
       "name": "llm",
+      "title": "AI Chat (demo)",
       "upstream": "http://127.0.0.1:4800",
       "meter": "tokens",
       "rate": 0.01,
@@ -18,10 +19,12 @@
       "description": "Mock LLM (offline). Pay per token used; streams on a tab.",
       "capabilities": [
         "text_generation"
-      ]
+      ],
+      "unitLabel": "token"
     },
     {
       "name": "pools",
+      "title": "Liquidity Pools (demo)",
       "upstream": "http://127.0.0.1:4800/graphql",
       "meter": "rows",
       "rate": 0.002,
@@ -34,10 +37,12 @@
       "description": "Mock GraphQL pools API (offline). Priced per pool returned.",
       "capabilities": [
         "onchain_analytics"
-      ]
+      ],
+      "unitLabel": "pool"
     },
     {
       "name": "blob",
+      "title": "Data Files (demo)",
       "upstream": "http://127.0.0.1:4800",
       "meter": "bytes",
       "rate": 0.001,
@@ -47,10 +52,12 @@
       "description": "Mock data blobs (offline). Priced per KB returned.",
       "capabilities": [
         "file_download"
-      ]
+      ],
+      "unitLabel": "byte"
     },
     {
       "name": "price-flat",
+      "title": "ETH Price (demo)",
       "upstream": "http://127.0.0.1:4800",
       "meter": "request",
       "rate": 0.01,
@@ -59,7 +66,8 @@
       "description": "Mock ETH price (offline). One flat price per call, like classic x402.",
       "capabilities": [
         "market_data"
-      ]
+      ],
+      "unitLabel": "call"
     }
   ]
 }

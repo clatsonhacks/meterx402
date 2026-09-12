@@ -28,7 +28,7 @@ ${bold("mx402")} — turn any API into an x402 API that charges for what each ca
       Serve it behind a metered paywall. With no --meter, the meter and a starting
       rate are detected from the API's own response.
 
-  ${bold("mx402 publish <api-url> --wallet <account>")} [--capability c] [--description s] [--registry url] [--yes]
+  ${bold("mx402 publish <api-url> --wallet <account>")} [--title s] [--unit-label s] [--capability c] [--description s] [--registry url] [--yes]
       The one command to sell an API: detect its type, auth and meter, confirm the
       pricing, start the payment endpoint, and register it so agents can discover it.
 
