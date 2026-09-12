@@ -19,6 +19,14 @@ if (process.argv[2] === "mcp") {
     return (isFrame ? toStdout : toStderr)(chunk as never, ...(rest as never[]));
   }) as typeof process.stdout.write;
   console.log = (...a: unknown[]) => { console.error(...a); };
+} else {
+  // Every other command: the same greeting would be the first line of human
+  // output, above the answer the person asked for. Drop exactly that line.
+  const toStdout = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
+    const s = typeof chunk === "string" ? chunk : Buffer.isBuffer(chunk) ? chunk.toString("utf8") : "";
+    return /^Patching Protobuf Long\.js instance\.\.\.\s*$/.test(s) ? true : toStdout(chunk as never, ...(rest as never[]));
+  }) as typeof process.stdout.write;
 }
 
 const { cli } = await import("./cli.ts");

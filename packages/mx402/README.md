@@ -1,14 +1,15 @@
 # mx402
 
-**Turn any API into an x402 API that charges for what each call actually uses** — per token, per
-row, per KB, per ms — instead of one flat price per call. Settles on Hedera through the public
-blocky402 facilitator. No private key on your server, no metering stack to build.
+**Turn any API into an x402 API that charges for what each call actually returns**: per token,
+row, cell, entity, KB or ms, instead of one flat price per call. Buyers, people or AI agents,
+see the exact price before they sign, pay inside a budget, and get a receipt they can verify on
+chain. Settles on **Hedera** (HBAR or HTS tokens), or in **USDC on Base or Solana**.
 
 ```bash
-# 1. see what it would meter and what calls would cost — nothing is charged
+# 1. see what it would meter and what calls would cost: nothing is charged
 npx mx402 check https://api.your-service.com/v1/things
 
-# 2. go live
+# 2. go live (Hedera by default; --chain base-sepolia | solana-devnet for USDC)
 npx mx402 https://api.your-service.com --wallet 0.0.1234
 ```
 
@@ -23,50 +24,60 @@ import { MeterX402Agent, MeterX402, wrap } from "mx402";
 // sell: payment + metering around an API you already run (meter auto-detected)
 await wrap({ upstream: "https://api.example.com", wallet: "0.0.1234", capabilities: ["weather_forecast"], registry: HUB });
 
-// buy: discover → quote → budget → pay → receipt, as an agent
+// buy as an agent: discover → quote → budget → pay → receipt
 const agent = new MeterX402Agent({ wallet, budget: "5 HBAR", registry: HUB });
-const r = await agent.call("weather_forecast");   // best compatible service, within budget
-r.receipt; r.verification;                        // SettlementReceipt + re-metering check
+const r = await agent.call("lending_rates");   // best compatible service, within budget
+r.receipt; r.verification;                     // SettlementReceipt + re-metering check
 
-// or one step at a time
-const q = await new MeterX402({ wallet, budget: "1 HBAR", registry: HUB }).quote("weather-api");
-if ("pay" in q && Number(q.quote.amount) < 0.01) await q.pay();
+// pay from an EVM or Solana wallet instead
+const base = new MeterX402({ wallet: { privateKey: process.env.EVM_KEY, network: "eip155:84532" }, budget: "0.05 USDC", registry: HUB });
+const sol  = new MeterX402({ wallet: { privateKey: process.env.SOLANA_SECRET, network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" }, registry: HUB });
 ```
 
-`mx402 publish <url> --wallet <acct>` registers a service for discovery; `mx402 inspect <id>`
-shows its descriptor, pricing and reputation. Every service is also an A2A agent
-(`/.well-known/agent.json`) and is listed by the MeterX402 MCP server.
+The EVM and Solana signers (`viem`, `@solana/kit`, `@x402/evm`, `@x402/svm`) are optional
+dependencies, loaded only when a wallet on those chains is used.
+
+## For AI agents
+
+```json
+{ "mcpServers": { "meterx402": { "command": "npx", "args": ["-y", "mx402", "mcp"],
+  "env": { "MX_HUB": "http://127.0.0.1:4021", "BUYER_ACCOUNT_ID": "0.0.…", "BUYER_PRIVATE_KEY": "…", "BUYER_BUDGET": "1 HBAR" } } } }
+```
+
+The MCP server's tools:
+
+| Kind | Tools |
+|---|---|
+| Discovery | `list_services`, `get_service`, `get_reputation` |
+| Paying | `get_quote`, `pay_for_service`, `call_service` |
+| The Graph data | `find_dex_pools`, `find_lending_markets` |
+| Any subgraph, per entity, with no Graph key | `query_subgraph` |
+| The DEX analyst | `ask_dex_analyst`: The Graph + Uniswap + an LLM, every step paid and receipted |
+
+`mx402 analyst "<question>"` runs the same analyst from a terminal.
 
 ## What it detects
 
 | Your API returns | Metered as | Typical price |
 |---|---|---|
-| `usage.total_tokens` / `eval_count` / `usageMetadata` (LLMs) | `tokens` | 0.01 HBAR / 1K tokens |
-| a list — GraphQL `data.…[]`, `{result:[…]}`, nested arrays | `rows` (with the exact path) | per row returned |
+| `usage.total_tokens` / `eval_count` / `usageMetadata` (LLMs) | `tokens` | per 1K tokens |
+| a list: GraphQL `data.…[]`, `{result:[…]}`, nested arrays | `rows` (with the exact path) | per row returned |
 | a large body with neither | `bytes` | per KB |
 | a small fixed object | `request` | flat, per call |
 
-`mx402 check` prints the price of a small call, a large call, and what a flat price would have to
-charge to cover the worst case:
-
-```
-What calls would cost
-  this call             48 rows          0.0096 HBAR
-  forecast_days=1       24 rows          0.0048 HBAR
-  forecast_days=4       96 rows          0.0192 HBAR
-  ↳ same API, different work, different price. A flat price has to cover the worst case:
-  flat, at the cap     192 rows          0.0384 HBAR   ← what every call would cost without metering
-```
+`mx402 data <file.csv>` sells a dataset the same way, priced per cell returned, with free
+`/schema` and `/count`.
 
 ## How a buyer pays
 
-1. **Pay per call.** Their client gets `402` with the *exact* metered price of the response that
-   is waiting for them, pays it, and receives the body. One Hedera transaction per call, no
-   deposits, no refunds. The quote commits to `sha256(body)`, so what they pay for is what they get.
-2. **Metered Tabs** (`--tab`). They approve a Hedera HBAR **allowance** once — that allowance is
-   their spending limit, enforced by the ledger and revocable at any time — then call with no
-   per-call payment (~10ms instead of a consensus round trip). You settle the total in one
-   approved transfer per batch. Streaming responses (SSE, token by token) work on a tab.
+1. **Per call.** The client gets a `402` with the *exact* metered price of the response that is
+   waiting, pays it, and receives the body. The quote commits to `sha256(body)`, so what is paid
+   for is what arrives.
+2. **Metered Tabs** (`--tab`, Hedera). The buyer approves an HBAR **allowance** once: that
+   allowance is the spending limit, enforced by the ledger and revocable at any time. Calls then
+   run with no per-call payment, and streaming (SSE) works.
+3. **Subscriptions** (`--subscribe`, Hedera). The buyer pre-signs one scheduled transfer per
+   period; consensus executes them, and the buyer can cancel any period that has not run.
 
 Buyers cap any call with `x-meter-max-units: 500` (or `max_tokens` in an LLM body); the request is
 clamped upstream, so a cap limits the work done, not just the bill.
@@ -74,18 +85,20 @@ clamped upstream, so a cap limits the work done, not just the bill.
 ## Options
 
 ```
-Pricing        --meter tokens|tokens:output|rows|rows:<path>|bytes|ms|json:<path>|request
+Pricing        --meter tokens|tokens:output|rows|rows:<path>|cells|bytes|ms|json:<path>|request
                --rate 0.01  --per 1000  --min 0.0001  --free 0  --max-units 4000
-Lane           --wallet <0.0.x or 0x…>  --name  --port  --sample  --method  --body
+Lane           --wallet <0.0.x | 0x… | solana address>  --name  --port  --sample  --method  --body
                --header "K: V"  --query "k=v"   (your upstream key never reaches the buyer)
-Chains         --chain hedera | base | base-sepolia | solana      (hedera is the tested path)
+Chains         --chain hedera | base-sepolia | base | solana-devnet | solana
+Tokens         --asset <HTS token id>          (Hedera; the token's own fee schedule applies)
 Tabs           --tab  --tab-flush 0.01  --tab-every 15
+Subscriptions  --subscribe 0.05  --period 604800  --sub-periods 12  --sub-units 500
 Abuse limits   --hold-ttl 120  --max-holds 3  --rpm 0
-Dashboard      --hub http://localhost:4021    (stream events into a MeterX402 dashboard)
+Registry       --hub http://localhost:4021  --capability weather_forecast  --title  --description
 ```
 
 `mx402 wallet new` creates a funded Hedera testnet account to be paid into, if you don't have one.
 
-Full project, dashboard and source: <https://github.com/clatsonhacks/meterx402>
+Full project, web app, diagrams and source: <https://github.com/clatsonhacks/meterx402>
 
 MIT

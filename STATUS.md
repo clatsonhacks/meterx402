@@ -111,10 +111,23 @@ from `.env` (or a mock account offline). It is a demo wallet, not the visitor's.
   - Live runs paid 4 Hedera transactions each (0.016 and 0.017 HBAR).
 - **UI.** Prices, the pay sheet and receipts show the service's own currency and chain; USDC services skip the HBAR limits and ask first.
 
+### Graph and Uniswap depth, redesign, submission (2026-09-13)
+- **`lending-markets`**: one Messari lending query over 15 subgraphs. Live: 15/15 answered in 0.9 s.
+- **`subgraph-gateway`**: any subgraph billed per entity (`json:entities`). Live: 9 entities for 0.0009 HBAR; a failing query was free.
+- **`dex-pools` fallbacks** to Uniswap's own v3 subgraphs. Live: Base answered through the fallback.
+- **The analyst compares lending with DEX fee APR.** A question that names lending always gets it.
+- **Swap builder** (`src/graph/swap.ts`, `/playground/swap`, "Build this swap"). Live on Base: approval, Permit2, calldata, not sent.
+- **Agent surfaces.** MCP `find_lending_markets` and `query_subgraph` (12 tools in the packaged server), plus `skills/meterx402-onchain-data/SKILL.md`.
+- **Explore redesign.** A live-receipt hero, stats, ticker, bento and footer; the Playground leads with the analyst.
+- **Docs.** `docs/architecture.svg`/`.png`, a rewritten README, `SUBMISSION.md`, and `.env.example` with every key.
+- **npm package `mx402` 0.3.0**: built, packed and tested from a clean install (CLI, SDK, EVM and Solana wallets, MCP tools). Not published yet: needs `npm login`.
+
 ## ⏳ Pending
 
 - Call `SettlementAdapter.verify()` from the receipt path, so every receipt carries an on-chain check: mirror node on Hedera, RPC on EVM and Solana (`src/settlement/verify-chains.ts`). Today these checks run only from the live scripts and tests.
 - Submit the Uniswap developer feedback form with the link to FEEDBACK.md.
+- Publish `mx402` 0.3.0 to npm (`npm login`, then `cd packages/mx402 && npm publish`).
+- Record the demo video (script in SUBMISSION.md) and choose The Graph track pool.
 
 In rough priority order.
 

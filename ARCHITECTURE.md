@@ -238,3 +238,50 @@ end to end.
   model
 - **streaming** is available only on tabs, by design (§10 of APPROACH.md)
 - the npm package is **not published yet** (planned once the project is final)
+
+## 12. Multichain settlement and onchain data
+
+![architecture](docs/architecture.png)
+
+**Chains.** A `ChainPreset` (`src/chains.ts`) is a facilitator, a scheme and a network id; the gateway
+builds one `X402ExactAdapter` from it and never touches a chain directly.
+
+| Preset | Asset | Facilitator |
+|---|---|---|
+| `hedera` | HBAR or an HTS token | blocky402 |
+| `base-sepolia` | USDC via EIP-3009 | x402.org |
+| `solana-devnet` | USDC via SPL transfer | x402.org |
+
+The buyer SDK picks its signer from the wallet's CAIP-2 network and loads viem or `@solana/kit`
+only when needed. `SettlementAdapter.verify()` checks a settlement where it happened:
+
+| Chain | Checked against |
+|---|---|
+| Hedera | the mirror node |
+| EVM | USDC `Transfer` logs from an RPC |
+| Solana | token balance deltas from an RPC |
+
+**The Graph data service** (`src/graph/server.ts`) is an ordinary upstream behind three lanes.
+
+| Lane | Meter | Source |
+|---|---|---|
+| `dex-pools` | `rows:pools` | Messari DEX AMM, 15 subgraphs; Uniswap v3 fallbacks |
+| `lending-markets` | `rows:markets` | Messari lending, 15 subgraphs |
+| `subgraph-gateway` | `json:entities` | any subgraph or deployment |
+
+`fanOut()` (`src/graph/standard.ts`) asks every source in parallel, with a cache and a circuit
+breaker per subgraph. A failing source with a fallback asks that instead, and every source returns
+a report: `ok`, `schema`, `via`, `rows`, `ms`, errors.
+
+**The DEX analyst** (`src/graph/analyst.ts`) is a buyer, not a service. It spends through the SDK
+like any agent:
+
+1. plan (`llm`)
+2. pools (`dex-pools`) and lending (`lending-markets`)
+3. quote (`uniswap-quote`)
+4. answer (`llm`)
+
+Facts are computed in code, the LLM's JSON plan is validated against a rules plan, and
+`groundProse()` removes any sentence whose numbers are not in the paid data.
+`prepareSwap()` (`src/graph/swap.ts`) turns a quote into unsigned transactions for a wallet
+(approval, Permit2 signature, `/swap` calldata) and never broadcasts.

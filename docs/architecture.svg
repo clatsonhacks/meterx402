@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#868e96"/>
+    </marker>
+    <marker id="arrowP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7048e8"/>
+    </marker>
+    <linearGradient id="sol" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9945ff"/><stop offset="1" stop-color="#14f195"/></linearGradient>
+    <linearGradient id="head" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3b5bdb"/><stop offset="1" stop-color="#ae3ec9"/></linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1c1c28" flood-opacity="0.07"/></filter>
+  </defs>
+
+  <rect width="1600" height="1080" fill="#fafaf9"/>
+
+  <!-- title -->
+  <text x="48" y="62" font-size="30" font-weight="700" fill="#16161d">MeterX402</text>
+  <text x="208" y="62" font-size="30" font-weight="700" fill="url(#head)">architecture</text>
+  <text x="48" y="90" font-size="15.5" fill="#5c5f66">Usage-based x402 payments for APIs and AI agents: priced by what each call returns, settled on Hedera, Base or Solana, with live onchain data from The Graph and Uniswap.</text>
+
+  <!-- lifecycle -->
+  <g font-size="13" font-weight="600" fill="#343a40">
+    <rect x="48" y="112" width="172" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="134" y="134" text-anchor="middle">1  Discover</text>
+    <rect x="234" y="112" width="172" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="320" y="134" text-anchor="middle">2  Call the API</text>
+    <rect x="420" y="112" width="172" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="506" y="134" text-anchor="middle">3  Meter the answer</text>
+    <rect x="606" y="112" width="172" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="692" y="134" text-anchor="middle">4  402: exact price</text>
+    <rect x="792" y="112" width="172" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="878" y="134" text-anchor="middle">5  Sign within budget</text>
+    <rect x="978" y="112" width="172" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="1064" y="134" text-anchor="middle">6  Settle on chain</text>
+    <rect x="1164" y="112" width="172" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="1250" y="134" text-anchor="middle">7  Receipt + verify</text>
+    <rect x="1350" y="112" width="202" height="34" rx="17" fill="#fff" stroke="#dee2e6"/><text x="1451" y="134" text-anchor="middle">8  Reputation from evidence</text>
+  </g>
+
+  <!-- column labels -->
+  <g font-size="12" font-weight="700" fill="#868e96" letter-spacing="1.5">
+    <text x="48" y="196">BUYERS</text>
+    <text x="440" y="196">METERX402</text>
+    <text x="1130" y="196">SELLERS AND DATA</text>
+    <text x="48" y="806">SETTLEMENT · x402 FACILITATORS, VERIFIED ON CHAIN</text>
+  </g>
+
+  <!-- ═════ buyers ═════ -->
+  <g filter="url(#shadow)">
+    <rect x="48" y="212" width="340" height="120" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="48" y="347" width="340" height="120" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="48" y="482" width="340" height="110" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="48" y="607" width="340" height="155" rx="16" fill="#f6f2ff" stroke="#d0bfff"/>
+  </g>
+  <rect x="48" y="212" width="5" height="120" rx="2.5" fill="#3b5bdb"/>
+  <rect x="48" y="347" width="5" height="120" rx="2.5" fill="#3b5bdb"/>
+  <rect x="48" y="482" width="5" height="110" rx="2.5" fill="#3b5bdb"/>
+  <rect x="48" y="607" width="5" height="155" rx="2.5" fill="#7048e8"/>
+  <g font-size="13.5" fill="#495057">
+    <text x="72" y="244" font-size="16" font-weight="700" fill="#16161d">People · web app</text>
+    <text x="72" y="270">Explore, Try it, Playground, Activity</text>
+    <text x="72" y="292">Deployer: sell an API or a dataset</text>
+    <text x="72" y="314">limits before signing, receipts after</text>
+
+    <text x="72" y="379" font-size="16" font-weight="700" fill="#16161d">AI agents · MCP</text>
+    <text x="72" y="405">Claude Desktop, Cursor, any MCP client</text>
+    <text x="72" y="427">find_dex_pools · find_lending_markets</text>
+    <text x="72" y="449">query_subgraph · ask_dex_analyst</text>
+
+    <text x="72" y="514" font-size="16" font-weight="700" fill="#16161d">Agents and apps · SDK, A2A</text>
+    <text x="72" y="540">MeterX402, MeterX402Agent, wrap()</text>
+    <text x="72" y="562">budget and caps checked before signing</text>
+    <text x="72" y="582" font-size="12.5" fill="#868e96">EVM, Solana or Hedera wallet</text>
+
+    <text x="72" y="639" font-size="16" font-weight="700" fill="#16161d">DEX analyst agent</text>
+    <text x="72" y="665">1  plan the query (LLM, per token)</text>
+    <text x="72" y="687">2  pools + lending (The Graph, per row)</text>
+    <text x="72" y="709">3  quote the trade (Uniswap, per quote)</text>
+    <text x="72" y="731">4  answer only with numbers it paid for</text>
+    <text x="72" y="752" font-size="12.5" fill="#7048e8">every step an x402 payment with a receipt</text>
+  </g>
+
+  <!-- ═════ meterx402 ═════ -->
+  <g filter="url(#shadow)">
+    <rect x="440" y="212" width="640" height="150" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="440" y="382" width="640" height="262" rx="16" fill="#fff" stroke="#d0bfff" stroke-width="1.5"/>
+    <rect x="440" y="664" width="640" height="98" rx="16" fill="#fff" stroke="#e3e5e8"/>
+  </g>
+  <text x="464" y="244" font-size="16" font-weight="700" fill="#16161d">Hub</text>
+  <text x="506" y="244" font-size="13" fill="#868e96">one process the gateways, the web app and agents talk to</text>
+  <g font-size="12.5" font-weight="600" fill="#343a40">
+    <rect x="464" y="262" width="190" height="32" rx="9" fill="#f1f3f5"/><text x="559" y="283" text-anchor="middle">Registry and discovery</text>
+    <rect x="664" y="262" width="198" height="32" rx="9" fill="#f1f3f5"/><text x="763" y="283" text-anchor="middle">Reputation from settlements</text>
+    <rect x="872" y="262" width="184" height="32" rx="9" fill="#f1f3f5"/><text x="964" y="283" text-anchor="middle">Quote rounds (RFQ)</text>
+    <rect x="464" y="306" width="190" height="32" rx="9" fill="#f1f3f5"/><text x="559" y="327" text-anchor="middle">HCS-14 agent identity</text>
+    <rect x="664" y="306" width="198" height="32" rx="9" fill="#f1f3f5"/><text x="763" y="327" text-anchor="middle">Analytics and event tape</text>
+    <rect x="872" y="306" width="184" height="32" rx="9" fill="#f1f3f5"/><text x="964" y="327" text-anchor="middle">HCS receipts, disputes</text>
+  </g>
+
+  <text x="464" y="414" font-size="16" font-weight="700" fill="#16161d">Gateway</text>
+  <text x="540" y="414" font-size="13" fill="#868e96">one per API:</text>
+  <text x="620" y="414" font-size="13" font-family="Consolas, 'Cascadia Code', monospace" fill="#7048e8">npx mx402 &lt;api-url&gt; --wallet &lt;account&gt;</text>
+  <g>
+    <rect x="464" y="434" width="112" height="66" rx="12" fill="#f3f0ff" stroke="#b197fc"/>
+    <rect x="590" y="434" width="112" height="66" rx="12" fill="#f3f0ff" stroke="#b197fc"/>
+    <rect x="716" y="434" width="112" height="66" rx="12" fill="#f3f0ff" stroke="#b197fc"/>
+    <rect x="842" y="434" width="112" height="66" rx="12" fill="#f3f0ff" stroke="#b197fc"/>
+    <rect x="968" y="434" width="88" height="66" rx="12" fill="#f3f0ff" stroke="#b197fc"/>
+  </g>
+  <g font-size="14" font-weight="700" fill="#5f3dc4" text-anchor="middle">
+    <text x="520" y="462">Meter</text><text x="646" y="462">Hold</text><text x="772" y="462">402 quote</text><text x="898" y="462">Verify</text><text x="1012" y="462">Release</text>
+  </g>
+  <g font-size="11.5" fill="#6c5fa6" text-anchor="middle">
+    <text x="520" y="483">count the units</text><text x="646" y="483">keep the body</text><text x="772" y="483">the exact price</text><text x="898" y="483">pay matches quote</text><text x="1012" y="483">+ receipt</text>
+  </g>
+  <g stroke="#b197fc" stroke-width="1.6" fill="none" marker-end="url(#arrowP)">
+    <path d="M577 467 H588"/><path d="M703 467 H714"/><path d="M829 467 H840"/><path d="M955 467 H966"/>
+  </g>
+  <g font-size="13.5" fill="#495057">
+    <text x="464" y="534"><tspan font-weight="700" fill="#16161d">Meters</tspan>  tokens · rows · cells · entities · bytes · ms · request</text>
+    <text x="464" y="562"><tspan font-weight="700" fill="#16161d">Caps</tspan>  the buyer's max units clamp the upstream call, not only the bill</text>
+    <text x="464" y="590"><tspan font-weight="700" fill="#16161d">Metered Tabs</tspan>  an allowance is the limit; streaming token by token</text>
+    <text x="464" y="618"><tspan font-weight="700" fill="#16161d">Subscriptions</tspan>  pre-signed scheduled transfers · HTS tokens with a ledger fee</text>
+  </g>
+
+  <text x="464" y="696" font-size="16" font-weight="700" fill="#16161d">SettlementAdapter · x402 exact</text>
+  <text x="464" y="722" font-size="13.5" fill="#495057">one payment path for every chain; the gateway never talks to a chain directly</text>
+  <text x="464" y="746" font-size="13.5" fill="#495057">checked on chain afterwards: Hedera mirror node, EVM receipt logs, Solana balances</text>
+
+  <!-- ═════ sellers and data ═════ -->
+  <g filter="url(#shadow)">
+    <rect x="1130" y="212" width="422" height="120" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="1130" y="347" width="422" height="110" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="1130" y="472" width="422" height="152" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="1130" y="644" width="422" height="118" rx="16" fill="#f4f0ff" stroke="#c5b3ff"/>
+  </g>
+  <rect x="1130" y="212" width="5" height="120" rx="2.5" fill="#0c8599"/>
+  <rect x="1130" y="347" width="5" height="110" rx="2.5" fill="#ff007a"/>
+  <rect x="1130" y="472" width="5" height="152" rx="2.5" fill="#6f4cff"/>
+  <rect x="1130" y="644" width="5" height="118" rx="2.5" fill="#6f4cff"/>
+  <g font-size="13.5" fill="#495057">
+    <text x="1154" y="244" font-size="16" font-weight="700" fill="#16161d">Any HTTP or GraphQL API</text>
+    <text x="1154" y="270">Groq LLM · Open-Meteo · Etherscan</text>
+    <text x="1154" y="292">CSV, JSON and JSONL datasets (mx402 data)</text>
+    <text x="1154" y="314">the seller's API key stays on the gateway</text>
+
+    <text x="1154" y="379" font-size="16" font-weight="700" fill="#16161d">Uniswap Trading API</text>
+    <text x="1154" y="405">/quote · /check_approval · /swap, sold per call</text>
+    <text x="1154" y="427">CLASSIC routes and UniswapX orders</text>
+    <text x="1154" y="449">swap calldata built for a wallet, never sent</text>
+
+    <text x="1154" y="504" font-size="16" font-weight="700" fill="#16161d">Graph data service</text>
+    <text x="1154" y="530">DEX pools: one query, 15 standardized subgraphs</text>
+    <text x="1154" y="552">lending markets: Aave, Compound, Spark and more</text>
+    <text x="1154" y="574">any subgraph, billed per entity returned</text>
+    <text x="1154" y="596">Uniswap's own subgraphs when an indexer fails</text>
+    <text x="1154" y="615" font-size="12.5" fill="#868e96">holds the Graph API key; buyers never need one</text>
+
+    <text x="1154" y="676" font-size="16" font-weight="700" fill="#16161d">The Graph Network</text>
+    <text x="1154" y="702">Messari DEX AMM and lending schemas</text>
+    <text x="1154" y="724">Uniswap v3 subgraphs on 7 chains</text>
+    <text x="1154" y="746">15,000+ subgraphs through the gateway</text>
+  </g>
+
+  <!-- ═════ settlement ═════ -->
+  <g filter="url(#shadow)">
+    <rect x="48" y="822" width="490" height="170" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="556" y="822" width="490" height="170" rx="16" fill="#fff" stroke="#e3e5e8"/>
+    <rect x="1064" y="822" width="488" height="170" rx="16" fill="#fff" stroke="#e3e5e8"/>
+  </g>
+  <circle cx="78" cy="853" r="8" fill="#1f1f24"/>
+  <circle cx="586" cy="853" r="8" fill="#0052ff"/>
+  <circle cx="1094" cy="853" r="8" fill="url(#sol)"/>
+  <g font-size="13.5" fill="#495057">
+    <text x="96" y="858" font-size="16" font-weight="700" fill="#16161d">Hedera testnet</text>
+    <text x="220" y="858" font-size="13" fill="#868e96">via blocky402</text>
+    <text x="72" y="888">HBAR per call, or HTS tokens with a consensus-taken fee</text>
+    <text x="72" y="912">Metered Tabs on native HBAR allowances</text>
+    <text x="72" y="936">subscriptions as scheduled transactions</text>
+    <text x="72" y="960">HCS receipts; transfers checked on the mirror node</text>
+
+    <text x="604" y="858" font-size="16" font-weight="700" fill="#16161d">Base Sepolia</text>
+    <text x="716" y="858" font-size="13" fill="#868e96">via x402.org</text>
+    <text x="580" y="888">USDC with EIP-3009 transferWithAuthorization</text>
+    <text x="580" y="912">the buyer signs; the facilitator pays gas</text>
+    <text x="580" y="936">verified from the USDC Transfer log</text>
+    <text x="580" y="960">live: 0.0005 USDC for 10 pools, block 46740372</text>
+
+    <text x="1112" y="858" font-size="16" font-weight="700" fill="#16161d">Solana devnet</text>
+    <text x="1232" y="858" font-size="13" fill="#868e96">via x402.org</text>
+    <text x="1088" y="888">USDC as an SPL transfer</text>
+    <text x="1088" y="912">the facilitator is the fee payer</text>
+    <text x="1088" y="936">verified from the seller's token balance</text>
+    <text x="1088" y="960">live: 0.00048 USDC for 48 hours, slot 497387384</text>
+  </g>
+
+  <!-- ═════ arrows ═════ -->
+  <g stroke="#868e96" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+    <!-- buyers into the gateway -->
+    <path d="M388 272 C 416 272, 412 450, 438 450"/>
+    <path d="M388 407 C 416 407, 412 488, 438 488"/>
+    <path d="M388 537 C 414 537, 414 540, 438 540"/>
+    <path d="M388 684 C 416 684, 412 600, 438 600"/>
+    <!-- gateway reports to the hub -->
+    <path d="M760 381 V 364"/>
+    <!-- gateway to upstreams -->
+    <path d="M1081 452 C 1106 452, 1100 272, 1128 272"/>
+    <path d="M1081 470 C 1106 470, 1100 402, 1128 402"/>
+    <path d="M1081 500 C 1106 500, 1100 548, 1128 548"/>
+    <!-- graph service to the network -->
+    <path d="M1341 625 V 642"/>
+    <!-- gateway to its settlement adapter -->
+    <path d="M760 645 V 662"/>
+    <!-- adapter to the chains -->
+    <path d="M760 763 V 790 H 500 V 820"/>
+    <path d="M760 790 H 801 V 820"/>
+    <path d="M801 790 H 1308 V 820"/>
+  </g>
+  <g stroke="#adb5bd" stroke-width="1.4" fill="none" stroke-dasharray="5 5" marker-end="url(#arrow)">
+    <path d="M388 232 C 414 232, 414 240, 438 240"/>
+  </g>
+  <g font-size="12" fill="#868e96" font-style="italic">
+    <text x="394" y="226">discover</text>
+    <text x="392" y="378">call · 402 · pay</text>
+    <text x="772" y="377">events, receipts</text>
+    <text x="1086" y="340">metered call</text>
+    <text x="772" y="784">verify and settle</text>
+  </g>
+
+  <text x="1552" y="1050" font-size="12.5" fill="#adb5bd" text-anchor="end">ETHOnline 2026 · github.com/clatsonhacks/meterx402 · testnets only</text>
+</svg>

@@ -1,10 +1,14 @@
 {
   "name": "mx402",
-  "version": "0.2.0",
-  "description": "A payment layer for APIs and AI agents: usage-based x402 payments, a service registry, reputation, Metered Tabs and A2A/MCP adapters, settled on Hedera.",
+  "version": "0.3.0",
+  "description": "Usage-based x402 payments for APIs and AI agents: metered per token, row or entity, settled on Hedera, Base or Solana, with a service registry, reputation, and MCP/A2A adapters.",
   "type": "module",
   "bin": {
     "mx402": "dist/mx402.mjs"
+  },
+  "main": "./dist/sdk.mjs",
+  "exports": {
+    ".": "./dist/sdk.mjs"
   },
   "files": [
     "dist",
@@ -15,30 +19,46 @@
     "node": ">=20"
   },
   "keywords": [
-    "x402",
-    "hedera",
-    "metered",
-    "usage-based",
-    "pay-per-token",
-    "api",
-    "monetization",
-    "agents",
-    "micropayments",
     "a2a",
+    "agents",
+    "ai-agents",
+    "api",
+    "base",
+    "defi",
+    "evm",
+    "hedera",
     "mcp",
+    "metered",
+    "micropayments",
+    "monetization",
+    "pay-per-token",
+    "pay-per-use",
     "registry",
-    "reputation"
+    "reputation",
+    "solana",
+    "subgraph",
+    "the-graph",
+    "uniswap",
+    "usage-based",
+    "usdc",
+    "x402"
   ],
   "license": "MIT",
+  "homepage": "https://github.com/clatsonhacks/meterx402#readme",
+  "bugs": {
+    "url": "https://github.com/clatsonhacks/meterx402/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/clatsonhacks/meterx402.git"
   },
+  "optionalDependencies": {
+    "@x402/evm": "2.25.0",
+    "@x402/svm": "2.25.0",
+    "viem": "^2.56.3",
+    "@solana/kit": "^5.5.1"
+  },
   "scripts": {
     "prepublishOnly": "cd ../.. && node scripts/build-cli.mjs"
-  },
-  "exports": {
-    ".": "./dist/sdk.mjs"
-  },
-  "main": "./dist/sdk.mjs"
+  }
 }

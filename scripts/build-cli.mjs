@@ -7,12 +7,17 @@ import { chmodSync, mkdirSync, statSync } from "node:fs";
 
 mkdirSync("packages/mx402/dist", { recursive: true });
 
+// The EVM and Solana signers are loaded only when a wallet on those chains is
+// used. They stay out of the bundle and ship as optionalDependencies, so a
+// Hedera-only `npx mx402` starts fast and Base/Solana work after a normal install.
+const CHAIN_LIBS = ["@x402/evm", "@x402/evm/*", "@x402/svm", "@x402/svm/*", "viem", "viem/*", "@solana/kit"];
+
 const shared = {
   bundle: true,
   platform: "node",
   format: "esm",
   target: "node20",
-  external: ["@x402/evm", "@x402/svm"],
+  external: CHAIN_LIBS,
   legalComments: "none",
 };
 const requireShim = [
@@ -36,7 +41,7 @@ await build({
   outfile: out,
   // optional chains: only needed for --chain base/solana, so they stay external
   // and the "install @x402/evm" message in chains.ts does its job.
-  external: ["@x402/evm", "@x402/svm"],
+  external: CHAIN_LIBS,
   legalComments: "none",
   banner: {
     js: [

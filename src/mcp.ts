@@ -205,7 +205,7 @@ server.tool(
       service_id: l.service_id,
       name: l.descriptor.name,
       capabilities: l.descriptor.capabilities,
-      pricing: `${l.price.rate} ${l.price.currency} per ${l.price.per === 1 ? "" : l.price.per + " "}${l.price.unit}`,
+      pricing: `${l.price.rate} ${l.price.currency} per ${l.price.per === 1 ? String(l.descriptor.pricing?.unit_label ?? l.price.unit).replace(/s$/, "") : `${l.price.per} ${l.price.unit}`}`,
       typical_call: l.price.typical_call,
       reputation: l.reputation.score ?? `unrated (${l.reputation.sample_size} samples)`,
       interfaces: l.descriptor.interfaces,
