@@ -629,3 +629,17 @@ details.raw, details.what { margin-top: 10px; }
 .dropzone b { color: var(--text-primary); font-size: 14px; }
 .dropzone .hint { font-size: 12px; }
 .dropzone.busy { opacity: 0.7; pointer-events: none; }
+
+/* ── connect-an-LLM cards and guides: follow the theme ───────────────────
+   Their inline <style> loads after this file and uses fixed light colours;
+   :root raises specificity so the tokens win in both themes. */
+:root .connect-card { background: var(--bg-overlay); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+:root .connect-card:hover { border-color: var(--accent); }
+:root .connect-title, :root .llm-modal h2, :root .llm-step-content h3 { color: var(--text-primary); }
+:root .connect-desc, :root .llm-modal .label, :root .llm-step-content p { color: var(--text-secondary); }
+:root .llm-modal-content { background: var(--bg-overlay); color: var(--text-primary); border: 1px solid var(--border); }
+:root .llm-modal-close { color: var(--text-tertiary); }
+:root .llm-modal-close:hover { color: var(--text-primary); }
+:root .llm-step-num, :root .copy-btn { background: var(--accent); color: #fff; }
+:root .copy-btn:hover { background: var(--accent-hover, var(--accent)); filter: brightness(1.08); }
+:root .code-block, :root .llm-step-content code { background: var(--bg-inset); border-color: var(--border); color: var(--text-primary); }
