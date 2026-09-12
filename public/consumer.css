@@ -5,6 +5,43 @@
 /* ── mode visibility ─────────────────────────────────────────────────── */
 .mode-user .dep-only, .mode-deployer .user-only { display: none !important; }
 
+/* ── a quote round ───────────────────────────────────────────────────── */
+.rfq { margin-bottom: 16px; }
+.rfq-head { display: flex; gap: 12px; align-items: flex-start; }
+.rfq-head .close { margin-left: auto; background: none; border: 0; font-size: 20px; line-height: 1; color: var(--text-tertiary); cursor: pointer; }
+.rfq-title { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.rfq-form { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 10px; align-items: end; margin-top: 14px; }
+.rfq-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.rfq-form .primary { height: 38px; }
+@media (max-width: 760px) { .rfq-form { grid-template-columns: 1fr 1fr; } .rfq-form .primary { grid-column: 1 / -1; } }
+
+.bids { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
+.bid {
+  display: grid; grid-template-columns: minmax(0, 1.6fr) auto minmax(80px, 1fr) auto; gap: 14px; align-items: center;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-overlay);
+  animation: bid-in 240ms var(--ease-out) both; animation-delay: calc(var(--i) * 60ms);
+}
+@keyframes bid-in { from { opacity: 0; transform: translateY(6px); } }
+.bid.won { border-color: var(--success); background: var(--success-subtle); }
+.bid.declined, .bid.no_response { opacity: 0.62; }
+.b-who { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.b-who b { display: block; font-size: 13.5px; }
+.b-who span { font-size: 11.5px; color: var(--text-tertiary); }
+.b-price { text-align: right; font-variant-numeric: tabular-nums; }
+.b-price b { font-size: 15px; }
+.b-price .usd { display: block; font-size: 11px; }
+.rankbar { display: block; height: 6px; border-radius: 3px; background: var(--bg-inset); overflow: hidden; }
+.rankbar i { display: block; height: 100%; background: var(--accent); }
+.bid.won .rankbar i { background: var(--success); }
+.b-tag { text-align: right; white-space: nowrap; }
+.rfq-why { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-inset); font-size: 12.5px; color: var(--text-secondary); }
+.rfq-why b { display: block; color: var(--text-primary); }
+@media (max-width: 640px) {
+  .bid { grid-template-columns: 1fr auto; }
+  .b-rank { display: none; }
+  .b-tag { grid-column: 1 / -1; text-align: left; }
+}
+
 /* ── the hub went away ───────────────────────────────────────────────── */
 .netbar {
   position: sticky; top: 56px; z-index: 19; display: flex; gap: 10px; align-items: center; justify-content: center;

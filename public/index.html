@@ -81,6 +81,7 @@
       <div class="toolbar">
         <span class="label" id="mkt-sub" aria-live="polite"></span>
         <span class="spacer"></span>
+        <button class="ghost" id="mkt-compare" aria-expanded="false" aria-controls="rfq-panel">Get quotes</button>
         <label class="check"><input type="checkbox" id="mkt-rated"> Trusted only</label>
         <select id="mkt-sort" aria-label="Sort">
           <option value="best">Recommended</option>
@@ -89,6 +90,21 @@
           <option value="fast">Fastest</option>
         </select>
       </div>
+      <section class="card rfq" id="rfq-panel" hidden aria-label="Ask several sellers for a price">
+        <div class="rfq-head">
+          <div><div class="rfq-title">Ask every seller at once</div>
+            <div class="label">State the job and the most you will pay. Each live seller answers, and the ones that decline say why.</div></div>
+          <button class="close" id="rfq-x" aria-label="Close">&times;</button>
+        </div>
+        <div class="rfq-form">
+          <label>I need<select id="rfq-cap"></select></label>
+          <label>About how much<input type="number" id="rfq-units" min="1" value="24"></label>
+          <label>At most (HBAR)<input type="number" id="rfq-max" min="0" step="0.001" value="0.05"></label>
+          <button class="primary" id="rfq-go">Ask for quotes</button>
+        </div>
+        <div id="rfq-out"></div>
+      </section>
+
       <div class="mkt" id="mkt-grid"></div>
     </div>
 

@@ -512,6 +512,64 @@ function renderActivity() {
   $("act-list").querySelectorAll("[data-open]").forEach((el) => el.onclick = (e) => { if (!e.target.closest("a")) openService(el.dataset.open, "try"); });
 }
 
+// ── a quote round, watched ──────────────────────────────────────────────
+// The registry can already run an auction (POST /rfq). This is what it looks
+// like: every live seller with the capability answers at once, the winner is
+// named with the reason it won, and the sellers that declined stay on screen
+// with theirs. Losing bids are evidence too, which is the point.
+function rfqOpen(open) {
+  $("rfq-panel").hidden = !open;
+  $("mkt-compare").setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  const caps = [...new Set(M.services.flatMap((l) => l.descriptor.capabilities))].sort();
+  $("rfq-cap").innerHTML = caps.map((c) => `<option value="${esc(c)}">${esc(CATS[c]?.label ?? prettyName(c))}</option>`).join("");
+  $("rfq-max").value = LIM.perRequest;
+  $("rfq-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+$("mkt-compare").onclick = () => rfqOpen($("rfq-panel").hidden);
+$("rfq-x").onclick = () => rfqOpen(false);
+
+$("rfq-go").onclick = async () => {
+  const out = $("rfq-out"), cap = $("rfq-cap").value;
+  const maxUnits = Number($("rfq-units").value) || undefined;
+  const maxPrice = $("rfq-max").value || undefined;
+  $("rfq-go").disabled = true;
+  out.innerHTML = `<div class="working"><span class="spin"></span><div><b>Asking every ${esc(CATS[cap]?.label ?? cap)} seller…</b><div class="sub">Estimates are free: nothing runs upstream and nothing is charged.</div></div></div>`;
+  const r = await fetch("/rfq", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ buyer: W.account ?? "anonymous", capability: cap, max_units: maxUnits, max_price: maxPrice, currency: "HBAR" }),
+  }).then((x) => x.json()).catch((e) => ({ error: String(e) }));
+  $("rfq-go").disabled = false;
+  if (!Array.isArray(r?.offers)) { out.innerHTML = errorHtml("Couldn't run the round", r?.error, false); return; }
+  renderRound(r, out);
+};
+
+function renderRound(r, out) {
+  const best = r.offers.find((o) => o.service_id === r.winner);
+  const row = (o, i) => {
+    const l = M.services.find((x) => x.service_id === o.service_id);
+    const won = o.service_id === r.winner;
+    const price = o.est_amount == null ? "no price" : `${fmt(o.est_amount)} ${o.currency}`;
+    const usd = o.est_amount != null && usdOf(Number(o.est_amount)) != null ? `<span class="usd">≈ ${usdText(usdOf(Number(o.est_amount)))}</span>` : "";
+    const rel = best?.est_amount && o.est_amount && o.status === "offered"
+      ? Math.min(100, (Number(best.est_amount) / Number(o.est_amount)) * 100) : 0;
+    return `<li class="bid ${o.status}${won ? " won" : ""}" style="--i:${i}">
+      <div class="b-who">${l ? avatar(l.descriptor) : ""}<div><b>${esc(l ? titleOf(l.descriptor) : o.service_id)}</b>
+        <span>${o.reputation == null ? "unrated" : `reputation ${o.reputation}`}${o.median_latency_ms != null ? ` · ${(o.median_latency_ms / 1000).toFixed(1)}s` : ""}</span></div></div>
+      <div class="b-price"><b>${price}</b>${usd}</div>
+      <div class="b-rank"><span class="rankbar"><i style="width:${rel}%"></i></span></div>
+      <div class="b-tag">${won ? `<span class="trust excellent">${icon("star")} Winner</span>`
+        : o.status === "offered" ? `<span class="sub">rank ${o.rank}</span>`
+        : `<span class="sub">${esc(o.reason ?? o.status)}</span>`}</div>
+    </li>`;
+  };
+  out.innerHTML = `<ol class="bids">${r.offers.map(row).join("")}</ol>
+    <div class="rfq-why"><b>${r.winner ? "Why it won" : "No winner"}</b><div>${esc(r.why)}</div></div>
+    ${r.winner ? `<div class="runbar"><button class="primary" id="rfq-buy">Try ${esc(best && M.services.find((x) => x.service_id === r.winner) ? titleOf(M.services.find((x) => x.service_id === r.winner).descriptor) : r.winner)}</button>
+      <span class="label">Estimates come from published rates; you will see the exact price before paying.</span></div>` : ""}`;
+  $("rfq-buy")?.addEventListener("click", () => openService(r.winner, "try"));
+}
+
 // ── "for AI agents" snippets (Developers tab) ───────────────────────────
 function renderAgentSnippets() {
   const reg = `curl -s '${HUB}/registry/services?capability=weather_forecast&minReputation=80'`;

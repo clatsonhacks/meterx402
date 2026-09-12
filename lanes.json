@@ -55,6 +55,40 @@
       "unitLabel": "forecast hour"
     },
     {
+      "name": "weather-budget",
+      "title": "Weather Budget",
+      "_note": "Open-Meteo: open data, no key at all. Priced per hour of forecast returned.",
+      "upstream": "https://api.open-meteo.com/v1/forecast",
+      "meter": "rows:hourly.time",
+      "rate": "0.00005",
+      "min": 0.0005,
+      "maxUnits": 240,
+      "port": 4102,
+      "sample": "/?latitude=13.0827&longitude=80.2707&hourly=temperature_2m&forecast_days=2",
+      "description": "The same Open-Meteo forecasts at the lowest rate on the market, from a seller with no track record yet.",
+      "capabilities": [
+        "weather_forecast"
+      ],
+      "unitLabel": "forecast hour"
+    },
+    {
+      "name": "weather-premium",
+      "title": "Weather Premium",
+      "_note": "Open-Meteo: open data, no key at all. Priced per hour of forecast returned.",
+      "upstream": "https://api.open-meteo.com/v1/forecast",
+      "meter": "rows:hourly.time",
+      "rate": "0.0004",
+      "min": 0.0005,
+      "maxUnits": 240,
+      "port": 4103,
+      "sample": "/?latitude=13.0827&longitude=80.2707&hourly=temperature_2m&forecast_days=2",
+      "description": "Open-Meteo forecasts at a premium rate. Priced per forecast hour returned.",
+      "capabilities": [
+        "weather_forecast"
+      ],
+      "unitLabel": "forecast hour"
+    },
+    {
       "name": "etherscan",
       "title": "Ethereum Transactions",
       "upstream": "https://api.etherscan.io/v2/api",

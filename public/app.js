@@ -226,6 +226,20 @@ async function refreshPublished() {
   const qs = new URLSearchParams(location.search);
   renderPublishCli();
   if (qs.get("stream") || qs.get("lane") || hash.startsWith("deployer")) return setMode("deployer", false);
+  if (qs.get("rfq")) {
+    setMode("user", false); setUserTab("market", false);
+    const want = qs.get("rfq");
+    const t = setInterval(() => {
+      if (!M.services.length) return;
+      clearInterval(t);
+      rfqOpen(true);
+      if (want !== "1" && [...$("rfq-cap").options].some((o) => o.value === want)) $("rfq-cap").value = want;
+      if (qs.get("units")) $("rfq-units").value = qs.get("units");
+      if (qs.get("max")) $("rfq-max").value = qs.get("max");
+      if (qs.get("run") !== "0") $("rfq-go").click();
+    }, 200);
+    return;
+  }
   if (qs.get("service")) { setMode("user", false); return openPlayground(qs.get("service"), qs.get("integ") ?? undefined); }
   if (qs.get("open")) {
     setMode("user", false); setUserTab("market", false);
