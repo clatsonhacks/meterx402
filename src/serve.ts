@@ -48,6 +48,11 @@ export interface LaneSpec {
   capabilities?: string[];
   title?: string;
   unitLabel?: string;
+  /** Sell access by the period, paid by pre-signed scheduled transfers. */
+  subscribe?: string;
+  period?: number;
+  subPeriods?: number;
+  subUnits?: number;
   tabFlush?: number | string;
 }
 
@@ -103,6 +108,12 @@ export function laneArgs(lane: LaneSpec, wallet: string, tabsPossible = false): 
   if (lane.description) args.push("--description", lane.description);
   if (lane.title) args.push("--title", lane.title);
   if (lane.unitLabel) args.push("--unit-label", lane.unitLabel);
+  if (lane.subscribe) {
+    args.push("--subscribe", lane.subscribe);
+    if (lane.period) args.push("--period", String(lane.period));
+    if (lane.subPeriods) args.push("--sub-periods", String(lane.subPeriods));
+    if (lane.subUnits) args.push("--sub-units", String(lane.subUnits));
+  }
   for (const c of lane.capabilities ?? []) args.push("--capability", c);
   if (lane.body != null) { const b = s(lane.body); if (b == null) return null; args.push("--body", b); }
   for (const [k, v] of Object.entries(lane.headers ?? {})) { const val = s(v); if (val == null) return null; args.push("--header", `${k}: ${val}`); }

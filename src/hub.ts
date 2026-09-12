@@ -233,6 +233,7 @@ function buyer() {
 const SELF = `http://127.0.0.1:${HUB_PORT}`;
 const pendingQuotes = new Map<string, import("./sdk/buyer.ts").PendingQuote>();
 const rounds = new Map<string, Round>();   // recent quote rounds, for /rfq/:id
+const playgroundSubs = new Map<string, import("./sdk/buyer.ts").SubscriptionHandle>();
 async function sdkBuyer() {
   const c = await creds();
   if (!c) return null;
@@ -399,6 +400,42 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: r.ok, result: { status: r.status, paid: r.paid, data: trim(r.data), receipt: r.receipt, authorization: r.authorization, verification: r.verification, dispute: r.dispute } });
       } catch (e) {
         return json(res, 200, { ok: false, refused: (e as Error)?.name === "BudgetError", error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    // Subscriptions, from the browser. The hub keeps the handle, so a later
+    // call through the playground is covered by the period instead of paid for.
+    if (req.method === "POST" && url.pathname === "/playground/subscribe") {
+      const b = await readBody(req);
+      const mx = await sdkBuyer().catch(() => null);
+      if (!mx) return json(res, 200, { ok: false, error: "no buyer wallet: set BUYER_ACCOUNT_ID/BUYER_PRIVATE_KEY in .env" });
+      try {
+        const handle = await mx.subscribe(String(b.service_id), { periods: b.periods ? Number(b.periods) : 1 });
+        playgroundSubs.set(String(b.service_id), handle);
+        return json(res, 200, {
+          ok: true, subscription: handle.subscription, committed: handle.committed,
+          includesUnits: handle.includesUnits, periods: handle.periods,
+        });
+      } catch (e) {
+        return json(res, 200, { ok: false, refused: (e as Error)?.name === "BudgetError", error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    if (url.pathname === "/playground/subscriptions" && req.method === "GET") {
+      return json(res, 200, {
+        subscriptions: [...playgroundSubs].map(([service_id, h]) => ({
+          service_id, subscription: h.subscription, committed: h.committed,
+          includesUnits: h.includesUnits, periods: h.periods,
+        })),
+      });
+    }
+    if (req.method === "POST" && url.pathname === "/playground/call") {
+      const b = await readBody(req);
+      const handle = playgroundSubs.get(String(b.service_id));
+      if (!handle) return json(res, 200, { ok: false, error: "not subscribed to that service" });
+      try {
+        const r = await handle.call({ path: b.path || undefined, method: b.method || undefined, body: b.body || undefined, maxUnits: b.maxUnits ? Number(b.maxUnits) : undefined });
+        return json(res, 200, { ok: r.ok, result: { status: r.status, paid: r.paid, data: trim(r.data), receipt: r.receipt, verification: r.verification } });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
       }
     }
     if (req.method === "POST" && url.pathname === "/playground/a2a") {

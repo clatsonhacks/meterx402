@@ -82,11 +82,14 @@
       "maxUnits": 240,
       "port": 4103,
       "sample": "/?latitude=13.0827&longitude=80.2707&hourly=temperature_2m&forecast_days=2",
-      "description": "Open-Meteo forecasts at a premium rate. Priced per forecast hour returned.",
+      "description": "Open-Meteo forecasts at a premium rate, or by subscription: 0.02 HBAR a period with 200 forecast hours included.",
       "capabilities": [
         "weather_forecast"
       ],
-      "unitLabel": "forecast hour"
+      "unitLabel": "forecast hour",
+      "subscribe": "0.02",
+      "period": 300,
+      "subUnits": 200
     },
     {
       "name": "etherscan",
