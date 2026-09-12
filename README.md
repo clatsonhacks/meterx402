@@ -271,7 +271,14 @@ new MeterX402({ wallet: { privateKey: process.env.BUYER_SOLANA_SECRET_KEY, netwo
   - Solana: the seller's token balance change, [#L71](src/settlement/verify-chains.ts#L71).
 - `npm run demo` runs `dex-pools-base` (USDC on Base Sepolia) and `weather-solana` (USDC on Solana devnet) next to the Hedera lanes.
 
-Status: both gateways issue correct 402s. The EVM and Solana buyers sign, and the x402.org facilitator verifies what they sign. Settlement needs testnet USDC in the generated buyer wallets ([faucet.circle.com](https://faucet.circle.com)). Then run `npx tsx scripts/live-chains.ts`.
+Settled live with `npx tsx scripts/live-chains.ts`. Before running it, fund the buyers at [faucet.circle.com](https://faucet.circle.com). On Solana the seller also needs a USDC token account, because the x402 client does not create one.
+
+| chain | call | paid | checked on the chain |
+|---|---|---|---|
+| Solana devnet | `weather-solana`, 48 forecast hours | 0.00048 USDC | [34yVZcY9…](https://solscan.io/tx/34yVZcY96SnxgjfUh9T28yvDB96Aq5xJw5xv2BVm32LMD9zRuGd78io21FeVDyUVtEeXHB93ntyMsfxbdi7t3omH?cluster=devnet): 480 atomic USDC credited to the seller, slot 497387384 |
+| Base Sepolia | `dex-pools-base`, 10 pools | 0.0005 USDC | [0x4a2081cb…](https://sepolia.basescan.org/tx/0x4a2081cb8c497c635aff5211d970a66c2899361733e39693c5e61d2b4593b649): 500 atomic USDC credited to the seller, block 46740372 |
+
+In both calls the buyer SDK re-hashed and re-metered the response, and each matched its quote (48 and 10 units).
 
 ### The Graph: one standardized query across 15 DEX subgraphs
 

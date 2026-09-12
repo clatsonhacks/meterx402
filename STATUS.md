@@ -95,8 +95,10 @@ from `.env` (or a mock account offline). It is a demo wallet, not the visitor's.
 - **Base Sepolia and Solana devnet settlement.**
   - Chain presets, per-chain buyer signing (viem, `@solana/kit`), and chain-side verification (EVM receipt logs, Solana balance deltas).
   - Lanes `dex-pools-base` and `weather-solana`, and a wallet generator (`scripts/new-chain-wallets.ts`).
-  - Verified live: both gateways issue correct 402s, and the x402.org facilitator checks the signatures (refusal reasons: EVM `transfer amount exceeds balance`, Solana simulation of an unfunded token account).
-  - Real settlement waits on testnet USDC in the buyer wallets.
+  - Settled live on both chains, and each transfer was checked on the chain itself:
+    - Solana devnet: 0.00048 USDC, tx `34yVZcY9…`, 480 atomic credited to the seller.
+    - Base Sepolia: 0.0005 USDC, tx `0x4a2081cb…`, 500 atomic credited to the seller.
+  - On Solana the seller needs a USDC token account first; the x402 client only derives its address.
 - **The Graph.**
   - `dex-pools` lane over 15 Messari standardized DEX subgraphs with one query.
   - Per-source reports and a circuit breaker; `src/graph/server.ts` is started by `serve.ts` when `GRAPH_API_KEY` is set.
@@ -111,7 +113,7 @@ from `.env` (or a mock account offline). It is a demo wallet, not the visitor's.
 
 ## ⏳ Pending
 
-- Fund the Base Sepolia and Solana devnet buyer wallets with testnet USDC, then run `scripts/live-chains.ts` for real settlements.
+- Call `SettlementAdapter.verify()` from the receipt path, so every receipt carries an on-chain check: mirror node on Hedera, RPC on EVM and Solana (`src/settlement/verify-chains.ts`). Today these checks run only from the live scripts and tests.
 - Submit the Uniswap developer feedback form with the link to FEEDBACK.md.
 
 In rough priority order.
