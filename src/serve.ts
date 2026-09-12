@@ -46,6 +46,8 @@ export interface LaneSpec {
   /** How the service describes itself in the registry and marketplace. */
   description?: string;
   capabilities?: string[];
+  title?: string;
+  unitLabel?: string;
   tabFlush?: number | string;
 }
 
@@ -99,6 +101,8 @@ export function laneArgs(lane: LaneSpec, wallet: string, tabsPossible = false): 
     if (lane.tabFlush != null) args.push("--tab-flush", String(lane.tabFlush));
   }
   if (lane.description) args.push("--description", lane.description);
+  if (lane.title) args.push("--title", lane.title);
+  if (lane.unitLabel) args.push("--unit-label", lane.unitLabel);
   for (const c of lane.capabilities ?? []) args.push("--capability", c);
   if (lane.body != null) { const b = s(lane.body); if (b == null) return null; args.push("--body", b); }
   for (const [k, v] of Object.entries(lane.headers ?? {})) { const val = s(v); if (val == null) return null; args.push("--header", `${k}: ${val}`); }

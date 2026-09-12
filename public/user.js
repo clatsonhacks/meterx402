@@ -1,96 +1,446 @@
-// User view: the agent marketplace for humans.
+// User views: Explore (the marketplace for people), the service sheet with a
+// task-shaped "Try it", and Activity.
 //
-// Agents never need this page: they query /registry/services, the MCP server
-// or A2A agent cards. This is the same registry data made browsable, with a
-// "Try it" that walks the payment lifecycle one visible step at a time.
-// Reuses the helpers deployer.js defines ($, fmt, esc, short, time).
+// The protocol is still exactly the protocol: quote → budget check → pay →
+// verify → receipt. What changes here is who it's addressed to. The steps are
+// collapsed into one "Ready to pay" sheet and a receipt, with the timeline kept
+// under "What happened". The Developers tab (playground.js) shows the same
+// lifecycle step by step, and reuses runLifecycle() from the bottom of this file.
 
-const M = { services: [], q: "", cap: "all", sort: "best", rated: false, open: null, tab: "overview", receipts: {} };
+const M = { services: [], loaded: false, q: "", cap: "all", sort: "best", rated: false, open: null, tab: "try", receipts: {} };
 const HUB = location.origin;
-
-const initials = (name) => name.split(/[\s_-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
-const unitLabel = (p) => `${p.per === 1 ? "" : p.per + " "}${p.per === 1 ? p.unit.replace(/s$/, "") : p.unit}`;
-const priceLine = (d) => `${fmt(d.pricing.rate)} ${esc(d.pricing.currency)} <small>/ ${esc(unitLabel(d.pricing))}</small>`;
-const typical = (l) => (l.price.typical_call != null ? `typical call ${fmt(l.price.typical_call)} ${l.price.currency}` : l.price.worst_case_call != null ? `at most ${fmt(l.price.worst_case_call)} ${l.price.currency} a call` : "uncapped");
-const repLabel = (r) => (r.score == null ? `<span class="n" style="color:var(--muted);font-size:14px">unrated</span>` : `<span class="n">${r.score}<small>/100</small></span>`);
 const IFACE = { rest: "REST", graphql: "GraphQL", a2a: "A2A", mcp: "MCP", sdk: "SDK" };
-const COMP_LABEL = { execution: "Execution", response_success: "Response success", latency: "Latency", disputes: "No disputes", uptime: "Uptime", payment_reliability: "Payment reliability" };
+const COMP_LABEL = { execution: "Delivered what was paid for", response_success: "Answered successfully", latency: "Responds quickly", disputes: "No disputes", uptime: "Online when checked", payment_reliability: "Payments settle cleanly" };
 
 async function loadMarket() {
   try {
     const { services } = await fetch("/registry/services?live=all").then((r) => r.json());
     M.services = services;
-    renderMarket();
+    M.loaded = true;
+    renderExplore();
     if (typeof refreshPlaygroundServices === "function") refreshPlaygroundServices();
-    if (M.open) renderDrawer(false);
+    if (M.open) renderSheet(false);
   } catch {}
 }
 
+// ── Explore ─────────────────────────────────────────────────────────────
 function filtered() {
   const q = M.q.trim().toLowerCase();
   let xs = M.services.filter((l) => {
     const d = l.descriptor;
-    if (M.cap !== "all" && !d.capabilities.includes(M.cap)) return false;
-    if (M.rated && l.reputation.score == null) return false;
-    if (q && !`${d.name} ${d.description ?? ""} ${d.capabilities.join(" ")} ${d.service_id} ${d.pricing.unit}`.toLowerCase().includes(q)) return false;
+    if (M.cap !== "all" && catKey(d) !== M.cap) return false;
+    if (M.rated && !(l.reputation.score >= 75)) return false;
+    if (q && !`${titleOf(d)} ${d.name} ${d.description ?? ""} ${catOf(d).label} ${d.capabilities.join(" ")} ${unitBase(d.pricing)}`.toLowerCase().includes(q)) return false;
     return true;
   });
   const cost = (l) => l.price.typical_call ?? l.price.worst_case_call ?? Infinity;
   if (M.sort === "cheap") xs = xs.sort((a, b) => cost(a) - cost(b));
   if (M.sort === "rep") xs = xs.sort((a, b) => (b.reputation.score ?? -1) - (a.reputation.score ?? -1));
   if (M.sort === "fast") xs = xs.sort((a, b) => (a.reputation.stats.median_latency_ms ?? 1e9) - (b.reputation.stats.median_latency_ms ?? 1e9));
-  // "best" keeps the registry's ranking (reputation, then price, then latency)
   return xs.sort((a, b) => Number(b.live) - Number(a.live));
 }
 
-function renderMarket() {
-  const caps = [...new Set(M.services.flatMap((l) => l.descriptor.capabilities))].sort();
-  if (M.cap !== "all" && !caps.includes(M.cap)) M.cap = "all";
-  $("mkt-caps").innerHTML = ["all", ...caps].map((c) => `<button class="pill" data-cap="${esc(c)}" aria-pressed="${M.cap === c}">${c === "all" ? "All" : esc(c.replace(/_/g, " "))}</button>`).join("");
-  $("mkt-caps").querySelectorAll("button").forEach((b) => b.onclick = () => { M.cap = b.dataset.cap; renderMarket(); });
+function renderExplore() {
+  // categories, with counts
+  const counts = new Map();
+  for (const l of M.services) { const k = catKey(l.descriptor); counts.set(k, (counts.get(k) ?? 0) + 1); }
+  if (M.cap !== "all" && !counts.has(M.cap)) M.cap = "all";
+  const cats = [...counts.keys()].sort();
+  $("mkt-caps").innerHTML = [["all", { label: "Everything", icon: "sparkles" }], ...cats.map((k) => [k, CATS[k] ?? { label: prettyName(k), icon: "grid" }])]
+    .map(([k, c]) => `<button class="cat" data-cap="${esc(k)}" aria-pressed="${M.cap === k}">${icon(c.icon, "ci")}${esc(c.label)}${k === "all" ? "" : ` <small>${counts.get(k)}</small>`}</button>`).join("");
+  $("mkt-caps").querySelectorAll("button").forEach((b) => b.onclick = () => { M.cap = b.dataset.cap; renderExplore(); });
 
   const live = M.services.filter((l) => l.live).length;
-  $("mkt-sub").textContent = `${live} live service${live === 1 ? "" : "s"}, priced by what each call uses, settled on Hedera, rated from real payment evidence.`;
-
   const xs = filtered();
-  $("mkt-grid").innerHTML = xs.length ? xs.map((l) => {
-    const d = l.descriptor, r = l.reputation;
-    return `<article class="card svc" tabindex="0" data-id="${esc(d.service_id)}" aria-label="${esc(d.name)}">
-      <div class="top">
-        <div class="avatar" aria-hidden="true">${esc(initials(d.name))}</div>
-        <div style="min-width:0"><h3>${esc(d.name)}<span class="livedot ${l.live ? "" : "down"}" title="${l.live ? "live" : "not answering"}"></span></h3>
-          <div class="caps">${d.capabilities.map((c) => `<span>${esc(c)}</span>`).join("")}</div></div>
-      </div>
-      <div class="desc">${esc(d.description ?? "")}</div>
-      <div class="meta">
-        <div><div class="price">${priceLine(d)}</div><div class="sub">${esc(typical(l))}</div></div>
-        <div class="rep" title="${r.confidence} confidence, ${r.sample_size} samples">${repLabel(r)}<div class="sub">${r.stats.paid_calls} paid call${r.stats.paid_calls === 1 ? "" : "s"}</div></div>
-      </div>
-      <div class="ifaces">${d.interfaces.map((i) => `<span class="iface">${IFACE[i] ?? i}</span>`).join("")}${d.payment.streaming ? `<span class="iface">streaming</span>` : ""}${d.payment.settlement.some((o) => o.schemes.includes("tab")) ? `<span class="iface">tabs</span>` : ""}</div>
-      <div class="actions"><button class="primary" data-act="try">Try it</button><button class="ghost" data-act="integrate">Integrate</button><button class="ghost" data-act="details">Details</button></div>
-    </article>`;
-  }).join("") : `<div class="card empty-state" style="grid-column:1/-1">${M.services.length ? "No service matches: try another word or capability." : "No services yet. Switch to <b>Deployer</b> to publish one, or run <span class='mono'>npm run demo:offline</span>."}</div>`;
+  $("mkt-sub").textContent = M.services.length
+    ? `${xs.length} of ${M.services.length} service${M.services.length === 1 ? "" : "s"}${live < M.services.length ? ` · ${live} online` : ""}`
+    : "";
 
-  $("mkt-grid").querySelectorAll(".svc").forEach((card) => {
+  if (!M.loaded) { $("mkt-grid").innerHTML = Array.from({ length: 3 }, () => `<div class="card svc skeleton"><div class="sk-row"></div><div class="sk-line"></div><div class="sk-line short"></div></div>`).join(""); return; }
+  $("mkt-grid").innerHTML = xs.length ? xs.map(cardHtml).join("")
+    : `<div class="card empty-state" style="grid-column:1/-1">${M.services.length
+        ? `Nothing matches “${esc(M.q)}”. Try another word, or pick <b>Everything</b>.`
+        : `No services yet. Switch to <b>Deployer</b> to publish one, or run <span class="mono">npm run demo:offline</span>.`}</div>`;
+
+  $("mkt-grid").querySelectorAll(".svc[data-id]").forEach((card) => {
     const id = card.dataset.id;
-    card.onclick = (e) => {
-      const act = e.target.closest("button")?.dataset.act;
-      if (act === "integrate") return openPlayground(id);
-      openService(id, act === "try" ? "try" : "overview");
-    };
-    card.onkeydown = (e) => { if (e.key === "Enter") openService(id, "overview"); };
+    card.onclick = (e) => openService(id, e.target.closest("[data-act]")?.dataset.act === "about" ? "about" : "try");
+    card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openService(id, "try"); } };
   });
 }
 
-// ── the "for agents" panel: how an agent reaches the same services ───────
+function cardHtml(l) {
+  const d = l.descriptor, p = d.pricing, c = catOf(d);
+  const typical = l.price.typical_call, worst = l.price.worst_case_call;
+  const cents = typical != null ? centsPhrase(typical) : null;
+  return `<article class="card svc" tabindex="0" data-id="${esc(d.service_id)}" aria-label="${esc(titleOf(d))}">
+    <div class="top">
+      ${avatar(d)}
+      <div style="min-width:0">
+        <h3>${esc(titleOf(d))}</h3>
+        <div class="svc-cat">${esc(c.label)} · ${l.live ? `<span class="online">Online</span>` : `<span class="offline">Offline</span>`}</div>
+      </div>
+      ${trustBadge(l.reputation)}
+    </div>
+    <p class="desc">${esc(d.description ?? "")}</p>
+    <div class="pricebox">
+      <div class="p-main">${fmt(p.rate)} <small>HBAR ${esc(perPhrase(p))}</small></div>
+      <div class="p-sub">${typical != null ? `Typical use ${hbar(typical)}${cents ? ` · ${cents}` : ""}` : worst != null ? `Never more than ${hbar(worst)} a use` : "priced by usage"}</div>
+    </div>
+    <div class="foot">
+      <div class="feats">${d.payment.streaming ? `<span class="feat">${icon("zap")} Streams live</span>` : ""}${l.reputation.stats.paid_calls ? `<span class="feat">${l.reputation.stats.paid_calls} paid use${l.reputation.stats.paid_calls === 1 ? "" : "s"}</span>` : ""}</div>
+      <div class="actions">${l.live ? `<button class="primary">Try it</button>` : `<button class="ghost" data-act="about">Details</button>`}</div>
+    </div>
+  </article>`;
+}
+
+// ── the service sheet ───────────────────────────────────────────────────
+const TAB_ALIAS = { overview: "about", integrate: "dev", try: "try", about: "about", dev: "dev" };
+function openService(id, tab = "try") {
+  M.open = id; M.tab = TAB_ALIAS[tab] ?? "try";
+  renderSheet(true);
+  fetch(`/registry/receipts?service=${encodeURIComponent(id)}&limit=6`).then((r) => r.json())
+    .then((j) => { M.receipts[id] = j.receipts; if (M.open === id && M.tab === "about") renderSheet(false); }).catch(() => {});
+}
+function closeService() { M.open = null; TRY = null; $("drawer-root").innerHTML = ""; document.body.style.overflow = ""; }
+addEventListener("keydown", (e) => { if (e.key === "Escape" && M.open) closeService(); });
+
+function renderSheet(fresh) {
+  const l = M.services.find((x) => x.service_id === M.open);
+  if (!l) return closeService();
+  if (!fresh && M.tab === "try") return; // never wipe a purchase in progress
+  const d = l.descriptor, c = catOf(d);
+  document.body.style.overflow = "hidden";
+  $("drawer-root").innerHTML = `<div class="overlay" id="dr-ov"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(titleOf(d))}">
+    <div class="dhead">
+      <div class="dh">${avatar(d, "big")}
+        <div style="min-width:0"><h3>${esc(titleOf(d))}</h3>
+          <div class="sub">${esc(c.label)} · ${l.live ? `<span class="online">Online</span>` : `<span class="offline">Offline</span>`} · ${trustBadge(l.reputation)}</div></div>
+        <button class="close" id="dr-x" aria-label="Close">×</button></div>
+      <div class="subnav">${[["try", "Try it"], ["about", "About"], ["dev", "For developers"]].map(([t, label]) => `<button role="tab" data-t="${t}" aria-selected="${M.tab === t}">${label}</button>`).join("")}</div>
+    </div>
+    <div class="body" id="dr-body"></div>
+  </aside>`;
+  $("dr-ov").onclick = closeService;
+  $("dr-x").onclick = closeService;
+  $("drawer-root").querySelectorAll("[data-t]").forEach((b) => b.onclick = () => { M.tab = b.dataset.t; renderSheet(true); });
+  const body = $("dr-body");
+  if (M.tab === "try") renderTry(body, l);
+  if (M.tab === "about") body.innerHTML = aboutHtml(l);
+  if (M.tab === "dev") { body.innerHTML = devHtml(l); bindCopy(body); body.querySelector("#dr-pg")?.addEventListener("click", () => { closeService(); openPlayground(d.service_id); }); }
+}
+
+function aboutHtml(l) {
+  const d = l.descriptor, r = l.reputation, st = r.stats, p = d.pricing;
+  const cap = p.max_units;
+  const pcStart = Math.min(cap ?? 100, Math.max(1, Math.round((cap ?? 100) / 4)));
+  const reasons = [
+    [st.paid_calls > 0, `Delivered on ${st.paid_calls} paid request${st.paid_calls === 1 ? "" : "s"}`],
+    [st.upstream_errors === 0 && st.paid_calls > 0, "No failed responses"],
+    [st.median_latency_ms != null, `Answers in about ${((st.median_latency_ms ?? 0) / 1000).toFixed(1)}s`],
+    [st.disputes === 0, "No disputes ever filed"],
+    [st.uptime_ratio != null, `Online in ${Math.round((st.uptime_ratio ?? 0) * 100)}% of checks`],
+  ].filter(([ok]) => ok).map(([, t]) => `<li>✓ ${esc(t)}</li>`).join("");
+  const recent = (M.receipts[d.service_id] ?? []).slice(0, 5).map((x) =>
+    `<li><span>${ago(x.settled_at)}</span><span>${esc(units(p, x.metered_units))}</span><b>${hbar(x.amount)}</b></li>`).join("");
+  return `<p class="lead">${esc(d.description ?? "")}</p>
+
+    <h4>What it costs</h4>
+    <div class="pricecalc card">
+      <div class="pc-top"><b>${fmt(p.rate)} HBAR</b> <span>${esc(perPhrase(p))}</span></div>
+      <label class="pc-row">How much would you use?
+        <input type="range" id="pc-range" min="1" max="${cap ?? 100}" value="${pcStart}"></label>
+      <div class="pc-out" id="pc-out">${esc(units(p, pcStart))} → <b>${money(priceFor(p, pcStart))}</b></div>
+      ${cap ? `<div class="pc-flat">A flat-priced API has to charge for the worst case: <b>${hbar(priceFor(p, cap))}</b> every single call, however little you use.</div>` : ""}
+    </div>
+
+    <h4>Can you trust it?</h4>
+    <div class="trustbox">
+      <div class="tb-score">${trustBadge(r)}<div class="sub">${r.score == null ? `fewer than 5 paid uses so far` : `${Math.round(r.score)}/100 · ${r.confidence} confidence · ${r.sample_size} samples`}${r.anchor ? " · anchored on Hedera" : ""}</div></div>
+      <ul class="reasons">${reasons || "<li>No evidence yet: this service is new.</li>"}</ul>
+    </div>
+    <details class="adv"><summary>How the score is worked out</summary>
+      ${Object.keys(COMP_LABEL).map((k) => `<div class="comp"><span>${COMP_LABEL[k]}</span><span class="track"><i style="width:${Math.round(r.components[k] * 100)}%"></i></span><span class="w">${Math.round(r.components[k] * 100)}%</span></div>`).join("")}
+      <div class="sub">Every score comes from settlement evidence: paid calls, disputes, uptime probes and latency. Weights: ${Object.entries(r.weights).map(([k, v]) => `${k.replace(/_/g, " ")} ${v}`).join(", ")}.</div>
+    </details>
+
+    <h4>Recent uses</h4>
+    ${recent ? `<ul class="recent">${recent}</ul>` : `<div class="sub">No paid uses yet.</div>`}
+
+    <h4>Good to know</h4>
+    <div class="kv">
+      <span>Run by</span><span class="mono">${esc(d.owner.account)}</span>
+      <span>You pay</span><span>${esc(p.currency)} on ${esc(d.owner.network.replace(":", " "))}, straight to the seller</span>
+      <span>Your data</span><span>The seller holds any API key. Your request goes to them, and nothing else.</span>
+      ${d.payment.streaming ? `<span>Streaming</span><span>Yes, on a prepaid tab</span>` : ""}
+      <span>Most per call</span><span>${cap ? esc(units(p, cap)) : "no cap"}</span>
+    </div>`;
+}
+
+function devHtml(l) {
+  const d = l.descriptor;
+  const code = `import { MeterX402 } from "mx402";\n\nconst mx = new MeterX402({ wallet, budget: "1 HBAR", registry: "${HUB}" });\nconst r = await mx.call("${d.service_id}");\nconsole.log(r.receipt, r.data);`;
+  return `<div class="kv">
+      <span>service id</span><span class="mono">${esc(d.service_id)}</span>
+      <span>endpoint</span><span class="mono">${esc(d.endpoint)}</span>
+      <span>meter</span><span class="mono">${esc(d.pricing.meter)}</span>
+      <span>settlement</span><span>${d.payment.settlement.map((o) => `${esc(o.currency)} on ${esc(o.network)} (${o.schemes.join(" + ")})`).join("; ")}</span>
+      <span>interfaces</span><span>${d.interfaces.map((i) => IFACE[i] ?? i).join(" · ")}</span>
+      <span>links</span><span><a href="${esc(d.links.descriptor)}" target="_blank" rel="noopener">descriptor</a> · <a href="${esc(d.links.a2a_card)}" target="_blank" rel="noopener">A2A card</a></span>
+    </div>
+    ${snippet("SDK", code)}
+    <div class="runbar"><button class="primary" id="dr-pg">Open in the playground</button><span class="label">MCP, A2A, raw HTTP and CLI, runnable</span></div>`;
+}
+
+// ── Try it ──────────────────────────────────────────────────────────────
+let TRY = null; // { l, recipe, root, advTouched }
+
+function renderTry(body, l) {
+  const d = l.descriptor, recipe = recipeFor(d);
+  if (!l.live) {
+    body.innerHTML = `<div class="notice bad"><b>This service is offline right now.</b><div>Nothing can be requested or charged. It may come back: the registry keeps checking.</div></div>${aboutHtml(l)}`;
+    return;
+  }
+  body.innerHTML = `
+    <div class="tryform" id="tf">${recipe.form(d, l)}</div>
+    <details class="adv" id="t-adv"><summary>Advanced: the exact request</summary>
+      <div class="form" style="margin-top:8px">
+        <div class="trio"><label>Method<select id="a-method"><option>GET</option><option>POST</option></select></label>
+          <label>Path and query<input type="text" id="a-path"></label></div>
+        <label>Body<textarea id="a-body" rows="2"></textarea></label>
+        <label>Most ${esc(plural(unitBase(d.pricing), 2))} to use<input type="number" id="a-max" min="1" placeholder="the service's cap"></label>
+      </div>
+    </details>
+    <div class="costline" id="costline"></div>
+    <div class="runbar"><button class="primary big" id="t-go">${esc(recipe.cta)}</button></div>
+    <div id="t-out"></div>`;
+  TRY = { l, recipe, root: $("tf"), advTouched: false };
+  recipe.bind($("tf"), () => { syncAdvanced(); refreshCostLine(); });
+  ["a-method", "a-path", "a-body", "a-max"].forEach((id) => $(id).addEventListener("input", () => { TRY.advTouched = true; refreshCostLine(); }));
+  syncAdvanced();
+  refreshCostLine();
+  $("t-go").onclick = runTry;
+}
+
+/** Keep the advanced editor showing what the friendly form would send. */
+function syncAdvanced() {
+  if (!TRY || TRY.advTouched) return;
+  const req = TRY.recipe.build(TRY.l.descriptor, TRY.recipe.read(TRY.root));
+  $("a-method").value = req.method;
+  $("a-path").value = req.path;
+  $("a-body").value = req.body ?? "";
+}
+function currentRequest() {
+  const { l, recipe, root, advTouched } = TRY;
+  const f = recipe.read(root);
+  const req = advTouched
+    ? { method: $("a-method").value, path: $("a-path").value || "/", body: $("a-method").value === "GET" ? "" : $("a-body").value, stream: f.stream }
+    : recipe.build(l.descriptor, f);
+  const max = $("a-max")?.value;
+  return { req: { ...req, maxUnits: max || undefined }, f };
+}
+
+/** What this request is likely to cost, against the limit the user set. */
+function refreshCostLine() {
+  if (!TRY || !$("costline")) return;
+  const { l, recipe, root } = TRY, p = l.descriptor.pricing;
+  const f = recipe.read(root);
+  let est = null, exact = false;
+  const u = recipe.estimateUnits(l.descriptor, f);
+  if (u != null) { est = priceFor(p, p.max_units ? Math.min(u, p.max_units) : u); exact = true; }
+  else if (l.price.typical_call != null) est = l.price.typical_call;
+  const overs = est != null && est > Number(LIM.perRequest);
+  $("costline").className = `costline${overs ? " over" : ""}`;
+  $("costline").innerHTML = `
+    <span class="cl-est">${est == null
+      ? `You'll see the exact price before paying.`
+      : `${exact ? "This request" : "Usually"}: <b>${money(est)}</b>${exact && u != null ? ` for ${esc(units(p, Math.min(u, p.max_units ?? u)))}` : ""}`}</span>
+    <span class="cl-lim">${overs ? "⚠ above" : "Your limit:"} ${hbar(LIM.perRequest)} per request <button class="linky" id="cl-change">Change</button></span>`;
+  $("cl-change").onclick = (e) => { e.preventDefault(); openWalletPop(); };
+}
+
+const workingHtml = (msg) => `<div class="working"><span class="spin" aria-hidden="true"></span><div><b>${esc(msg)}</b><div class="sub">The service is running your request and measuring exactly what it uses. Nothing is charged yet.</div></div></div>`;
+const errorHtml = (title, detail) => `<div class="notice bad"><b>${esc(title)}</b><div>${esc(detail ?? "")}</div><div class="sub">Nothing was charged.</div></div>`;
+
+async function runTry() {
+  const { l, recipe } = TRY, d = l.descriptor;
+  const { req, f } = currentRequest();
+  const out = $("t-out");
+  if (req.stream) return streamTry(l, req, f, out);
+  if (!W.ok) { out.innerHTML = errorHtml("No wallet set up", "Add BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY to .env, or run the offline demo."); return; }
+
+  $("t-go").disabled = true;
+  out.innerHTML = workingHtml(recipe.working);
+  const steps = [{ t: "Asked for a price", d: `${esc(titleOf(d))} ran your request and metered it` }];
+  const qr = await fetch("/playground/quote", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ service_id: d.service_id, method: req.method, path: req.path, body: req.body || undefined, maxUnits: req.maxUnits }),
+  }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e) }));
+  $("t-go").disabled = false;
+
+  if (!qr.ok) { out.innerHTML = errorHtml("That didn't work", qr.error); return; }
+  if (qr.free) { out.innerHTML = `<div class="notice ok"><b>Free</b><div>Nothing billable was used, so there was nothing to pay.</div></div>${resultHtml(l, qr.result?.data, f)}`; return; }
+
+  const q = qr.quote, amount = Number(q.amount);
+  const overReq = amount > Number(LIM.perRequest);
+  const overSes = sessionSpent() + amount > Number(LIM.session);
+  steps.push({ t: "Got an exact price", d: `${esc(units(d.pricing, q.units))} → ${esc(q.amount)} ${esc(q.currency)}, with the answer held until paid` });
+
+  if (LIM.autopay && !overReq && !overSes) {
+    steps.push({ t: "Checked your limits", d: `under your ${hbar(LIM.perRequest)} limit, so it was paid automatically` });
+    return payQuote(l, q, f, out, steps, LIM.perRequest, true);
+  }
+  steps.push({ t: "Checked your limits", d: overReq ? `above your ${hbar(LIM.perRequest)} limit: asking you first` : overSes ? `would pass your ${hbar(LIM.session)} session limit: asking you first` : `within your ${hbar(LIM.perRequest)} limit` });
+  renderPaySheet(l, q, f, out, steps, { overReq, overSes });
+}
+
+function renderPaySheet(l, q, f, out, steps, warn) {
+  const d = l.descriptor, amount = Number(q.amount);
+  out.innerHTML = `<div class="paysheet">
+      <div class="ps-head">Ready</div>
+      <div class="ps-row"><span>${esc(titleOf(d))}</span><span>${esc(units(d.pricing, q.units))}</span></div>
+      <div class="ps-total"><span>Total</span><span class="amt">${fmt(q.amount)} <small>${esc(q.currency)}</small></span></div>
+      ${usdOf(amount) != null ? `<div class="ps-usd">≈ ${usdText(usdOf(amount))}</div>` : ""}
+      ${warn.overReq ? `<div class="notice warn">This is above your ${hbar(LIM.perRequest)} per-request limit.</div>` : ""}
+      ${warn.overSes ? `<div class="notice warn">This would take you past your ${hbar(LIM.session)} limit for this session.</div>` : ""}
+      <div class="ps-actions"><button class="primary big" id="ps-pay">Pay ${fmt(q.amount)} ${esc(q.currency)}</button><button class="ghost" id="ps-no">Cancel</button></div>
+      <div class="ps-fine">You pay only for what was measured. Cancel and nothing is charged. <span id="ps-cd"></span></div>
+    </div>`;
+  const cd = setInterval(() => {
+    const s = Math.max(0, Math.round((q.expires_at - Date.now()) / 1000));
+    const el = $("ps-cd");
+    if (!el) return clearInterval(cd);
+    el.textContent = s ? `The price is held for ${s}s.` : "The price expired: ask again.";
+    if (!s) { clearInterval(cd); $("ps-pay").disabled = true; }
+  }, 500);
+  $("ps-no").onclick = () => {
+    clearInterval(cd);
+    steps.push({ t: "You declined", d: "nothing was signed and nothing was paid; the hold expires on its own" });
+    out.innerHTML = `<div class="notice"><b>Cancelled.</b> <span class="sub">Nothing was charged.</span></div>${whatHappened(steps)}`;
+  };
+  $("ps-pay").onclick = () => { clearInterval(cd); payQuote(l, q, f, out, steps, q.amount, false); };
+}
+
+async function payQuote(l, q, f, out, steps, maxPrice, auto) {
+  const d = l.descriptor;
+  out.innerHTML = workingHtml("Paying on Hedera…");
+  const pr = await fetch("/playground/pay", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ quote_id: q.quote_id, maxPrice: String(maxPrice) }),
+  }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e) }));
+
+  if (!pr.ok || !pr.result?.paid) {
+    steps.push({ t: "Payment refused", d: esc(pr.error ?? `HTTP ${pr.result?.status}`), bad: true });
+    out.innerHTML = errorHtml(pr.refused ? "Refused before signing" : "Payment didn't go through", pr.error) + whatHappened(steps);
+    return;
+  }
+  const rc = pr.result.receipt, v = pr.result.verification;
+  steps.push({ t: "Paid", d: `${esc(rc.amount)} ${esc(rc.currency)} settled on Hedera${rc.transaction_id ? ` · ${esc(rc.transaction_id)}` : ""}` });
+  if (v) steps.push({ t: "Checked what arrived", d: `body hash ${v.bodyHash ? "matches the price you agreed" : "does NOT match"} · re-counted ${v.remetered ?? "n/a"} ${esc(rc.unit)} (${esc(v.method)})${pr.result.dispute?.filed ? " · dispute filed automatically" : ""}`, bad: v.bodyHash === false });
+
+  out.innerHTML = receiptHtml(l, rc, v, auto) + resultHtml(l, pr.result.data, f) + whatHappened(steps);
+  toast(`Paid ${hbar(rc.amount)} · ${esc(titleOf(d))}`);
+  loadMine(); loadMarket();
+}
+
+function receiptHtml(l, rc, v, auto) {
+  const d = l.descriptor, worst = l.price.worst_case_call, amount = Number(rc.amount);
+  const saved = worst != null && worst > amount ? worst - amount : null;
+  const verified = v ? v.bodyHash !== false && v.unitsMatch !== false : null;
+  return `<div class="receipt-card">
+    <div class="rc-head"><span class="rc-tick">✓</span><b>Paid ${fmt(rc.amount)} ${esc(rc.currency)}</b>${usdOf(amount) != null ? `<span class="usd">≈ ${usdText(usdOf(amount))}</span>` : ""}${auto ? `<span class="badge">auto-paid</span>` : ""}</div>
+    <div class="rc-lines">
+      <span>For</span><span>${esc(units(d.pricing, rc.metered_units))} × ${fmt(rc.rate)} ${esc(rc.currency)}${rc.per > 1 ? ` / ${rc.per}` : ""}</span>
+      ${verified != null ? `<span>Checked</span><span class="${verified ? "good" : "bad"}">${verified ? "You were charged for exactly what you received" : "What arrived did not match the price: a dispute was filed"}</span>` : ""}
+      ${saved != null ? `<span>Versus flat</span><span>A flat price would have been ${hbar(worst)} — you saved <b>${hbar(saved)}</b></span>` : ""}
+      ${rc.transaction_id ? `<span>Proof</span><span><a href="${esc(hashscanTx(rc.transaction_id))}" target="_blank" rel="noopener">View on HashScan ↗</a></span>` : `<span>Proof</span><span>On your prepaid tab; settles in a batch</span>`}
+    </div></div>`;
+}
+
+const resultHtml = (l, data, f) => {
+  const r = recipeFor(l.descriptor);
+  let rendered;
+  try { rendered = r.render(data, { d: l.descriptor, l, f }); } catch { rendered = autoRender(data); }
+  const raw = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  return `<div class="result-box">${rendered}</div>
+    <details class="adv raw"><summary>Raw response</summary><pre class="code respbox">${esc((raw ?? "").slice(0, 8000))}</pre></details>`;
+};
+
+const whatHappened = (steps) => `<details class="adv what"><summary>What happened</summary><ul class="steps">${steps.map((s) => `<li class="${s.bad ? "bad" : "ok"}"><span class="ic">${s.bad ? "!" : "✓"}</span><div><b>${esc(s.t)}</b><div class="d">${s.d}</div></div></li>`).join("")}</ul></details>`;
+
+/** Streaming: only possible on a prepaid tab, so there is nothing to withhold. */
+function streamTry(l, req, f, out) {
+  const d = l.descriptor, p = d.pricing;
+  const perUnit = Number(p.rate) / p.per;
+  const maxUnits = req.maxUnits ? Number(req.maxUnits) : Math.max(1, Math.floor(Number(LIM.perRequest) / perUnit));
+  out.innerHTML = `<div class="notice"><b>Streaming on a prepaid tab.</b> <span class="sub">You approve an allowance once; each answer is deducted as it's written, and stops at your limit.</span></div>
+    <div class="answer chat streaming"><p id="st-text"></p><span class="cursor"></span></div>
+    <div class="tick"><span id="st-u">measuring…</span><span id="st-c"></span></div>`;
+  const box = $("st-text");
+  let text = "";
+  const es = new EventSource(`/teststream?lane=${encodeURIComponent(d.name)}&prompt=${encodeURIComponent(req.prompt ?? "")}&maxUnits=${maxUnits}`);
+  es.addEventListener("open", (e) => { try { const o = JSON.parse(e.data); if (o.tab) $("st-c").textContent = `tab ${o.tab} · allowance ${o.allowance} HBAR`; } catch {} });
+  es.addEventListener("chunk", (e) => {
+    text += JSON.parse(e.data).text ?? "";
+    box.innerHTML = prose(text);
+    const approx = Math.ceil(text.length / 4);
+    $("st-u").textContent = `about ${units(p, approx)} so far · ~${hbar(priceFor(p, approx))}`;
+  });
+  es.addEventListener("cap", (e) => { const c = JSON.parse(e.data); text += `\n\n— stopped at your limit of ${c.cap} ${c.unit} —`; box.innerHTML = prose(text); });
+  es.addEventListener("receipt", (e) => {
+    const r = JSON.parse(e.data).receipt ?? {};
+    out.querySelector(".streaming")?.classList.remove("streaming");
+    $("st-u").textContent = `${units(p, r.billable ?? 0)} used`;
+    $("st-c").innerHTML = `${hbar(r.amount)} deducted from your tab`;
+    es.close();
+    toast(`Streamed ${units(p, r.billable ?? 0)} · ${hbar(r.amount)}`);
+    loadMine(); loadMarket();
+  });
+  es.addEventListener("error", (e) => { let m = "the stream stopped"; try { m = JSON.parse(e.data).error ?? m; } catch {} out.innerHTML = errorHtml("Streaming failed", m); es.close(); });
+  es.onerror = () => es.close();
+}
+
+// ── Activity ────────────────────────────────────────────────────────────
+function renderActivity() {
+  const listing = (id) => M.services.find((l) => l.service_id === id);
+  const spent = totalSpent();
+  const saved = MY.reduce((a, r) => { const w = listing(r.service_id)?.price.worst_case_call; return a + (w != null && w > Number(r.amount) ? w - Number(r.amount) : 0); }, 0);
+  $("act-kpis").innerHTML = [
+    ["Spent", `${fmt(spent)} <small>HBAR</small>`, usdOf(spent) != null ? `≈ ${usdText(usdOf(spent))}` : "on testnet"],
+    ["Paid uses", String(MY.length), `${new Set(MY.map((r) => r.service_id)).size} service${new Set(MY.map((r) => r.service_id)).size === 1 ? "" : "s"}`],
+    ["Saved vs flat", `${fmt(saved)} <small>HBAR</small>`, "versus paying each call's worst case"],
+  ].map(([k, v, s]) => `<div class="card tile"><div class="label">${k}</div><div class="v">${v}</div><div class="sub">${esc(s)}</div></div>`).join("");
+
+  if (!MY.length) {
+    $("act-list").innerHTML = `<div class="empty-state">Nothing yet. <button class="linky" id="act-go">Find something to try</button>.</div>`;
+    $("act-go").onclick = () => setUserTab("market");
+    return;
+  }
+  const day = (t) => { const d = new Date(t), n = new Date(); const same = (a, b) => a.toDateString() === b.toDateString(); return same(d, n) ? "Today" : same(d, new Date(n - 864e5)) ? "Yesterday" : d.toLocaleDateString([], { month: "long", day: "numeric" }); };
+  let last = null, html = "";
+  for (const r of MY) {
+    const l = listing(r.service_id), d = l?.descriptor;
+    const label = day(r.settled_at);
+    if (label !== last) { html += `<div class="act-day">${esc(label)}</div>`; last = label; }
+    html += `<div class="act-row"${d ? ` data-open="${esc(r.service_id)}"` : ""}>
+      ${d ? avatar(d) : `<div class="avatar cat" style="--h:220">${icon("grid")}</div>`}
+      <div class="ar-mid"><b>${esc(d ? titleOf(d) : r.service_id)}</b><span>${esc(d ? units(d.pricing, r.metered_units) : `${r.metered_units} ${r.unit}`)} · ${ago(r.settled_at)}</span></div>
+      <div class="ar-amt"><b>${fmt(r.amount)} ${esc(r.currency)}</b>${usdOf(r.amount) != null ? `<span class="usd">≈ ${usdText(usdOf(r.amount))}</span>` : ""}</div>
+      <div class="ar-proof">${r.transaction_id ? `<a href="${esc(hashscanTx(r.transaction_id))}" target="_blank" rel="noopener" title="View on HashScan">↗</a>` : `<span class="badge">tab</span>`}</div>
+    </div>`;
+  }
+  $("act-list").innerHTML = html;
+  $("act-list").querySelectorAll("[data-open]").forEach((el) => el.onclick = (e) => { if (!e.target.closest("a")) openService(el.dataset.open, "try"); });
+}
+
+// ── "for AI agents" snippets (Developers tab) ───────────────────────────
 function renderAgentSnippets() {
   const reg = `curl -s '${HUB}/registry/services?capability=weather_forecast&minReputation=80'`;
   const mcp = JSON.stringify({ mcpServers: { meterx402: { command: "npx", args: ["-y", "mx402", "mcp"], env: { MX_HUB: HUB, BUYER_ACCOUNT_ID: "0.0.…", BUYER_PRIVATE_KEY: "302e…", BUYER_BUDGET: "1 HBAR" } } } }, null, 2);
   const sdk = `import { MeterX402Agent } from "mx402";\n\nconst agent = new MeterX402Agent({ wallet, budget: "1 HBAR", registry: "${HUB}" });\nconst r = await agent.call("weather_forecast");   // discover → quote → pay → receipt`;
   const a2a = `# every service is an A2A agent\ncurl -s ${M.services[0]?.descriptor.links.a2a_card ?? "<endpoint>/.well-known/agent.json"}`;
-  $("agent-snippets").innerHTML = [
-    ["Registry API", reg], ["MCP server (Claude, any MCP client)", mcp], ["SDK", sdk], ["A2A", a2a],
-  ].map(([t, c]) => snippet(t, c)).join("");
+  $("agent-snippets").innerHTML = [["Registry API", reg], ["MCP server (Claude, any MCP client)", mcp], ["SDK", sdk], ["A2A", a2a]].map(([t, c]) => snippet(t, c)).join("");
   bindCopy($("agent-snippets"));
 }
 
@@ -99,7 +449,6 @@ function snippet(label, code, id = "") {
   return `<div class="snippet"${id ? ` id="${id}"` : ""}>${label ? `<div class="lbl">${esc(label)}</div>` : ""}<pre class="code">${highlight(code)}</pre><button class="copy" data-code="${esc(code)}">copy</button></div>`;
 }
 function highlight(code) {
-  // comments only: enough to make code scannable without a highlighter
   return esc(code).replace(/(^|\n)(\s*)(\/\/[^\n]*|#[^\n]*)/g, (_, a, b, c) => `${a}${b}<span class="c">${c}</span>`);
 }
 function bindCopy(root) {
@@ -110,100 +459,14 @@ function bindCopy(root) {
   });
 }
 
-// ── the service drawer ────────────────────────────────────────────────────
-function openService(id, tab = "overview") {
-  M.open = id; M.tab = tab;
-  renderDrawer(true);
-  fetch(`/registry/receipts?service=${encodeURIComponent(id)}&limit=6`).then((r) => r.json()).then((j) => { M.receipts[id] = j.receipts; if (M.open === id && M.tab === "overview") renderDrawer(false); }).catch(() => {});
-}
-function closeService() { M.open = null; $("drawer-root").innerHTML = ""; document.body.style.overflow = ""; }
-addEventListener("keydown", (e) => { if (e.key === "Escape" && M.open) closeService(); });
-
-function renderDrawer(fresh) {
-  const l = M.services.find((x) => x.service_id === M.open);
-  if (!l) return closeService();
-  if (!fresh && M.tab === "try") return; // don't wipe an in-progress purchase
-  const d = l.descriptor, r = l.reputation;
-  document.body.style.overflow = "hidden";
-  $("drawer-root").innerHTML = `<div class="overlay" id="dr-ov"></div>
-  <aside class="drawer" role="dialog" aria-label="${esc(d.name)}">
-    <div class="dhead">
-      <div class="dh"><div class="avatar">${esc(initials(d.name))}</div>
-        <div><h3 style="margin:0">${esc(d.name)}<span class="livedot ${l.live ? "" : "down"}"></span></h3><div class="sub mono">${esc(d.service_id)} · ${esc(d.type.toUpperCase())}</div></div>
-        <button class="close" id="dr-x" aria-label="Close">×</button></div>
-      <div class="subnav" style="margin:12px 0 0">${["overview", "try", "integrate"].map((t) => `<button role="tab" data-t="${t}" aria-selected="${M.tab === t}">${{ overview: "Overview", try: "Try it", integrate: "Integrate" }[t]}</button>`).join("")}</div>
-    </div>
-    <div class="body" id="dr-body"></div>
-  </aside>`;
-  $("dr-ov").onclick = closeService;
-  $("dr-x").onclick = closeService;
-  $("drawer-root").querySelectorAll("[data-t]").forEach((b) => b.onclick = () => { M.tab = b.dataset.t; renderDrawer(true); });
-  const body = $("dr-body");
-  if (M.tab === "overview") body.innerHTML = overviewHtml(l);
-  if (M.tab === "try") renderTry(body, l);
-  if (M.tab === "integrate") { body.innerHTML = integrateHtml(l); bindCopy(body); body.querySelector("#dr-pg")?.addEventListener("click", () => { closeService(); openPlayground(d.service_id); }); }
-}
-
-function overviewHtml(l) {
-  const d = l.descriptor, r = l.reputation, st = r.stats;
-  const comps = Object.keys(COMP_LABEL).map((k) => `<div class="comp"><span>${COMP_LABEL[k]}</span><span class="track"><i style="width:${Math.round(r.components[k] * 100)}%"></i></span><span class="w">${Math.round(r.components[k] * 100)}% ×${r.weights[k]}</span></div>`).join("");
-  const rec = (M.receipts[d.service_id] ?? []).map((x) => `<tr><td>${time(x.settled_at)}</td><td class="mono">${esc(short(x.buyer))}</td><td class="num">${x.metered_units} ${esc(x.unit)}</td><td class="num"><b>${fmt(x.amount)}</b></td><td>${x.transaction_id ? `<span class="mono" title="${esc(x.transaction_id)}">${esc(short(x.transaction_id))}</span>` : `<span class="badge">tab</span>`}</td></tr>`).join("");
-  return `<p style="margin:0 0 10px;color:var(--ink-2)">${esc(d.description ?? "")}</p>
-    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
-      <div class="card"><div class="label">Price</div><div class="price">${priceLine(d)}</div><div class="sub">${esc(typical(l))} · min ${fmt(d.pricing.min)} · cap ${d.pricing.max_units ?? "none"} ${esc(d.pricing.unit)}</div></div>
-      <div class="card"><div class="label">Reputation</div>${repLabel(r).replace('class="n"', 'class="n" style="font-size:24px"')}<div class="sub">${r.confidence} confidence · ${r.sample_size} samples${r.anchor ? " · anchored on HCS" : ""}</div></div>
-    </div>
-    <h4>How the score is built</h4>${comps}
-    <div class="sub" style="margin-top:6px">${st.paid_calls} paid calls · ${st.upstream_errors} upstream errors · ${st.disputes} disputes · median ${st.median_latency_ms ?? "–"} ms · uptime ${st.uptime_ratio == null ? "–" : Math.round(st.uptime_ratio * 100) + "%"}</div>
-    <h4>Payment</h4>
-    <div class="kv" style="margin:0">
-      <span>meter</span><span class="mono">${esc(d.pricing.meter)}</span>
-      <span>settlement</span><span>${d.payment.settlement.map((o) => `${esc(o.currency)} on ${esc(o.network)} (${o.schemes.join(" + ")})`).join("; ")}</span>
-      <span>streaming</span><span>${d.payment.streaming ? "yes, on a Metered Tab" : "no"}</span>
-      <span>upstream auth</span><span>${d.auth.type === "none" ? "none" : `${esc(d.auth.type)}, held by the seller — you never need it`}</span>
-      <span>interfaces</span><span>${d.interfaces.map((i) => IFACE[i] ?? i).join(" · ")}</span>
-      <span>owner</span><span class="mono">${esc(d.owner.account)}</span>
-      <span>links</span><span><a href="${esc(d.links.descriptor)}" target="_blank" rel="noopener">descriptor</a> · <a href="${esc(d.links.a2a_card)}" target="_blank" rel="noopener">A2A card</a></span>
-    </div>
-    <h4>Recent payments</h4>
-    ${rec ? `<table class="vtable"><tbody>${rec}</tbody></table>` : `<div class="sub">No payments yet.</div>`}`;
-}
-
-function integrateHtml(l) {
-  const d = l.descriptor;
-  const code = `import { MeterX402 } from "mx402";\n\nconst mx = new MeterX402({ wallet, budget: "1 HBAR", registry: "${HUB}" });\nconst r = await mx.call("${d.service_id}");\nconsole.log(r.receipt, r.data);`;
-  return `${snippet("SDK", code)}${snippet("A2A agent card", `curl -s ${d.links.a2a_card}`)}${snippet("Registry entry", `curl -s ${HUB}/registry/services/${d.service_id}`)}
-    <div class="runbar"><button class="primary" id="dr-pg">Open in Playground</button><span class="label">MCP, A2A, raw HTTP and CLI code, runnable</span></div>`;
-}
-
-// ── Try it: quote → budget → pay → receipt → verify, visibly ─────────────
-function requestDefaults(d) {
-  const s = d.sample ?? { method: "GET", path: "/" };
-  return { method: s.method, path: s.path, body: s.body ?? "" };
-}
-
-function renderTry(body, l) {
-  const d = l.descriptor, def = requestDefaults(d);
-  const streamable = d.payment.streaming;
-  body.innerHTML = `<div class="form">
-      <div class="trio"><label>Method<select id="t-method"><option ${def.method === "GET" ? "selected" : ""}>GET</option><option ${def.method === "POST" ? "selected" : ""}>POST</option></select></label>
-        <label>Path and query<input type="text" id="t-path" value="${esc(def.path)}"></label></div>
-      <label>Body<textarea id="t-body" rows="3">${esc(def.body)}</textarea></label>
-      <div class="pair"><label>Max ${esc(d.pricing.unit)}<input type="number" id="t-max" min="1" placeholder="none"></label>
-        <label>Max price (HBAR)<input type="number" id="t-price" min="0" step="0.0001" placeholder="none"></label></div>
-      <div class="runbar"><button class="primary" id="t-quote">Get a quote</button>${streamable ? `<button class="ghost" id="t-stream">Stream on a tab</button>` : ""}<span class="label">A quote runs the call and meters it. You pay only if you accept.</span></div>
-    </div><div id="t-out"></div>`;
-  const req = () => ({ method: $("t-method").value, path: $("t-path").value, body: $("t-method").value === "GET" ? "" : $("t-body").value, maxUnits: $("t-max").value, maxPrice: $("t-price").value });
-  $("t-quote").onclick = () => runLifecycle(d, req(), $("t-out"));
-  if (streamable) $("t-stream").onclick = () => streamInto(d, req(), $("t-out"));
-}
-
-/** The shared lifecycle runner (Try it and the Playground). */
+// ── the developer lifecycle runner (Developers tab) ─────────────────────
+// The same calls as above, but every step stays on screen: this is the view for
+// someone implementing against the protocol.
 async function runLifecycle(d, req, out, labels = {}) {
   const L = { quote: "Quote", budget: "Budget check", pay: "Pay and settle", verify: "Verify what arrived", ...labels };
   const steps = [];
   const paint = (extra = "") => { out.innerHTML = `<ul class="steps">${steps.map((s) => `<li class="${s.state}"><span class="ic">${s.state === "ok" ? "✓" : s.state === "bad" ? "!" : "…"}</span><div><b>${esc(s.title)}</b><div class="d">${s.detail}</div></div></li>`).join("")}</ul>${extra}`; };
-  steps.push({ state: "ok", title: "Discover", detail: `${esc(d.service_id)} from the registry · ${esc(d.pricing.meter)} at ${fmt(d.pricing.rate)} ${esc(d.pricing.currency)} / ${esc(unitLabel(d.pricing))}` });
+  steps.push({ state: "ok", title: "Discover", detail: `${esc(d.service_id)} from the registry · ${esc(d.pricing.meter)} at ${fmt(d.pricing.rate)} ${esc(d.pricing.currency)} / ${d.pricing.per === 1 ? "" : d.pricing.per + " "}${esc(d.pricing.unit)}` });
   steps.push({ state: "wait", title: L.quote, detail: "running the call and metering it…" });
   paint();
   const qr = await fetch("/playground/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ service_id: d.service_id, method: req.method, path: req.path, body: req.body || undefined, maxUnits: req.maxUnits || undefined }) }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e) }));
@@ -232,7 +495,7 @@ async function runLifecycle(d, req, out, labels = {}) {
       if (v) steps.push({ state: v.bodyHash && v.unitsMatch !== false ? "ok" : "bad", title: L.verify, detail: `body hash ${v.bodyHash ? "matches the quote" : "does NOT match"} · re-metered ${v.remetered ?? "n/a"} ${esc(rc.unit)} (${esc(v.method)})${pr.result.dispute?.filed ? " · dispute filed" : ""}` });
       steps.push({ state: "ok", title: "Receipt", detail: `SettlementReceipt ${esc(rc.receipt_id.slice(0, 8))}… · the seller's reputation now includes this call` });
       paint(respBlock(pr.result.data));
-      loadMarket();
+      loadMarket(); loadMine();
       resolve();
     };
   });
@@ -243,25 +506,18 @@ function respBlock(data) {
   return `<h4>Response</h4><pre class="code respbox">${esc((text ?? "").slice(0, 6000))}</pre>`;
 }
 
-/** Streaming lives on tabs: open (or reuse) the hub's tab and stream. */
-function streamInto(d, req, out) {
-  let prompt = "Explain metered payments in 60 words";
-  try { const b = JSON.parse(req.body || "{}"); const m = b.messages?.at(-1)?.content; if (m) prompt = m; } catch {}
-  out.innerHTML = `<h4>Streaming on a Metered Tab</h4><div class="stream-out"><span class="cursor"></span></div><div class="tick"><span id="st-u">0 ${esc(d.pricing.unit)}</span><span id="st-c"></span></div>`;
-  const box = out.querySelector(".stream-out");
-  let text = "";
-  const es = new EventSource(`/teststream?lane=${encodeURIComponent(d.name)}&prompt=${encodeURIComponent(prompt)}${req.maxUnits ? `&maxUnits=${req.maxUnits}` : ""}`);
-  es.addEventListener("open", (e) => { try { const o = JSON.parse(e.data); if (o.tab) $("st-c").textContent = `tab ${o.tab} · allowance ${o.allowance} HBAR`; } catch {} });
-  es.addEventListener("chunk", (e) => { text += JSON.parse(e.data).text ?? ""; box.innerHTML = `${esc(text)}<span class="cursor"></span>`; $("st-u").textContent = `~${Math.ceil(text.length / 4)} ${d.pricing.unit}`; });
-  es.addEventListener("cap", (e) => { const c = JSON.parse(e.data); text += `\n\n— stopped at your cap of ${c.cap} ${c.unit} —`; });
-  es.addEventListener("receipt", (e) => { const r = JSON.parse(e.data).receipt ?? {}; box.textContent = text; $("st-u").textContent = `${r.billable} ${r.unit} metered`; $("st-c").textContent = `${fmt(r.amount)} ${r.currency} debited · tab owes ${r.owed}`; es.close(); loadMarket(); });
-  es.addEventListener("error", (e) => { let m = "stream failed"; try { m = JSON.parse(e.data).error ?? m; } catch {} box.innerHTML = `<span class="status bad"><span class="ico">×</span>${esc(m)}</span>`; es.close(); });
-  es.onerror = () => es.close();
-}
+// ── wiring ──────────────────────────────────────────────────────────────
+$("mkt-q").oninput = () => { M.q = $("mkt-q").value; renderExplore(); };
+$("mkt-sort").onchange = () => { M.sort = $("mkt-sort").value; renderExplore(); };
+$("mkt-rated").onchange = () => { M.rated = $("mkt-rated").checked; renderExplore(); };
+// the price calculator inside the About tab
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "pc-range") return;
+  const l = M.services.find((x) => x.service_id === M.open);
+  if (!l) return;
+  const p = l.descriptor.pricing, n = Number(e.target.value);
+  $("pc-out").innerHTML = `${esc(units(p, n))} → <b>${money(priceFor(p, n))}</b>`;
+});
 
-// ── wiring ────────────────────────────────────────────────────────────────
-$("mkt-q").oninput = () => { M.q = $("mkt-q").value; renderMarket(); };
-$("mkt-sort").onchange = () => { M.sort = $("mkt-sort").value; renderMarket(); };
-$("mkt-rated").onchange = () => { M.rated = $("mkt-rated").checked; renderMarket(); };
 loadMarket().then(renderAgentSnippets);
 setInterval(loadMarket, 5000);

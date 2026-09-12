@@ -72,6 +72,8 @@ export interface GatewayConfig {
   serviceId?: string;          // registry id (default: slug of name)
   capabilities?: string[];     // what it does, e.g. weather_forecast (default: inferred)
   description?: string;
+  title?: string;              // display name for people
+  unitLabel?: string;          // one unit in plain words, e.g. "forecast hour"
   type?: ServiceType;          // default: inferred from the meter and sample
   publicUrl?: string;          // where buyers reach it (default: http://localhost:<port>)
 }
@@ -263,6 +265,7 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
     mx402: PROTOCOL_VERSION,
     service_id: serviceId,
     name: cfg.name,
+    ...(cfg.title ? { title: cfg.title } : {}),
     description: cfg.description ?? `${cfg.name}, metered by ${card.unit} (${describeRate(card, chain.currency)})`,
     type: serviceType,
     endpoint,
@@ -270,7 +273,7 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
     capabilities: agentCapabilities,
     ...(uaid ? { uaid } : {}),
     pricing: {
-      meter: meter.spec, unit: card.unit, rate: plainDecimal(card.rate), per: Number(card.per ?? 1),
+      meter: meter.spec, unit: card.unit, ...(cfg.unitLabel ? { unit_label: cfg.unitLabel } : {}), rate: plainDecimal(card.rate), per: Number(card.per ?? 1),
       min: plainDecimal(card.min ?? 0), free: card.free ?? 0, max_units: card.maxUnits ?? null, currency: chain.currency,
     },
     payment: {
@@ -933,6 +936,8 @@ Service descriptor (what agents discover in the registry):
   --service-id <id>   registry id                                                          [slug of --name]
   --capability <c>    what it does, repeatable (e.g. weather_forecast)                      [inferred]
   --description <s>   one line for humans and agents
+  --title <s>         display name for people (e.g. "Weather Forecast")                  [--name]
+  --unit-label <s>    one unit in plain words (e.g. "forecast hour")                      [the meter's unit]
   --type <t>          rest | graphql | llm                                                  [inferred]
   --public-url <url>  where buyers reach this gateway                        [http://127.0.0.1:<port>]
 
@@ -959,7 +964,7 @@ on-chain), then call with no per-call payment; the gateway settles usage in batc
 export function parseArgs(argv: string[]): GatewayConfig {
   const flag = (n: string, d?: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
   const flagAll = (n: string) => argv.reduce<string[]>((acc, a, i) => (a === `--${n}` && argv[i + 1] ? [...acc, argv[i + 1]] : acc), []);
-  const valueFlags = new Set(["wallet", "pay-to", "rate", "per", "min", "free", "max-units", "meter", "name", "port", "chain", "asset", "network", "facilitator", "header", "query", "sample", "method", "body", "hub", "hold-ttl", "max-holds", "rpm", "tab-flush", "tab-every", "subscribe", "period", "sub-periods", "sub-units", "service-id", "capability", "description", "type", "public-url", "registry"]);
+  const valueFlags = new Set(["wallet", "pay-to", "rate", "per", "min", "free", "max-units", "meter", "name", "port", "chain", "asset", "network", "facilitator", "header", "query", "sample", "method", "body", "hub", "hold-ttl", "max-holds", "rpm", "tab-flush", "tab-every", "subscribe", "period", "sub-periods", "sub-units", "service-id", "capability", "description", "title", "unit-label", "type", "public-url", "registry"]);
   const upstream = argv.find((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--") && valueFlags.has(argv[i - 1].slice(2))));
   if (!upstream || argv.includes("--help")) { console.log(GATEWAY_HELP); process.exit(upstream ? 0 : 1); }
   const payTo = flag("wallet") ?? flag("pay-to");
@@ -1001,6 +1006,8 @@ export function parseArgs(argv: string[]): GatewayConfig {
     serviceId: flag("service-id"),
     capabilities: flagAll("capability"),
     description: flag("description"),
+    title: flag("title"),
+    unitLabel: flag("unit-label"),
     type: flag("type") as ServiceType | undefined,
     publicUrl: flag("public-url"),
   };

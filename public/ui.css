@@ -3,7 +3,7 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: oklch(0.985 0.006 85 / 0.92);
+  background: var(--bg-topbar);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

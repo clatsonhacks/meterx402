@@ -14,6 +14,7 @@
   "lanes": [
     {
       "name": "llm",
+      "title": "AI Chat",
       "_note": "Groq (OpenAI-compatible). Set GROQ_API_KEY in .env. Streams token by token on a tab.",
       "upstream": "${LLM_URL:-https://api.groq.com/openai/v1}",
       "meter": "tokens",
@@ -32,10 +33,12 @@
       "description": "Open-source LLM (gpt-oss-20b on Groq). You pay for the tokens a reply actually uses, and can stream it.",
       "capabilities": [
         "text_generation"
-      ]
+      ],
+      "unitLabel": "token"
     },
     {
       "name": "weather",
+      "title": "Weather Forecast",
       "_note": "Open-Meteo: open data, no key at all. Priced per hour of forecast returned.",
       "upstream": "https://api.open-meteo.com/v1/forecast",
       "meter": "rows:hourly.time",
@@ -48,10 +51,12 @@
       "description": "Hourly weather forecasts for any coordinates, from Open-Meteo. Priced per forecast hour returned.",
       "capabilities": [
         "weather_forecast"
-      ]
+      ],
+      "unitLabel": "forecast hour"
     },
     {
       "name": "etherscan",
+      "title": "Ethereum Transactions",
       "upstream": "https://api.etherscan.io/v2/api",
       "meter": "rows",
       "rate": 0.001,
@@ -65,10 +70,12 @@
       "description": "Ethereum transaction history for any address, from Etherscan. Priced per transaction returned.",
       "capabilities": [
         "blockchain_data"
-      ]
+      ],
+      "unitLabel": "transaction"
     },
     {
       "name": "uniswap-data",
+      "title": "Uniswap Pools",
       "upstream": "https://gateway.thegraph.com/api/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
       "meter": "rows",
       "rate": 0.002,
@@ -84,10 +91,12 @@
       "description": "Uniswap v3 pools and TVL from The Graph. Priced per pool returned.",
       "capabilities": [
         "onchain_analytics"
-      ]
+      ],
+      "unitLabel": "pool"
     },
     {
       "name": "tally",
+      "title": "DAO Governance",
       "upstream": "https://api.tally.xyz/query",
       "meter": "rows",
       "rate": 0.0005,
@@ -102,10 +111,12 @@
       "description": "DAO governance data from Tally: chains, proposals. Priced per record returned.",
       "capabilities": [
         "dao_governance"
-      ]
+      ],
+      "unitLabel": "record"
     },
     {
       "name": "alphavantage",
+      "title": "Stock Quotes",
       "upstream": "https://www.alphavantage.co/query",
       "meter": "request",
       "rate": 0.01,
@@ -117,7 +128,8 @@
       "description": "Stock quotes from Alpha Vantage. One flat price per quote.",
       "capabilities": [
         "market_data"
-      ]
+      ],
+      "unitLabel": "quote"
     }
   ]
 }

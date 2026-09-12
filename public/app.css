@@ -51,6 +51,10 @@
   --terminal-value: oklch(0.80 0.14 80);
   --terminal-wallet: oklch(0.78 0.14 200);
 
+  /* The sticky bar is translucent for the backdrop blur, so it needs its own
+     token: a plain var() cannot carry the alpha. */
+  --bg-topbar: oklch(0.985 0.006 85 / 0.92);
+
   /* Shape, depth and motion */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -78,6 +82,104 @@
   --good-text: var(--success-ink);
   --critical: var(--error);
   --chip: var(--bg-elevated);
+}
+
+/* ── Dark ─────────────────────────────────────────────────────────────────
+   The light theme is warm paper (hue 85) under cool ink (hue 280-300). Dark
+   inverts that opposition rather than abandoning it: a cool ground under warm
+   light text — which is exactly what this palette's own --terminal-* tokens
+   already describe, so the dark theme is the design system's existing dark
+   object grown to fill the page. The accent lifts from 0.55 to 0.68 lightness
+   because indigo at 0.55 disappears against a dark ground.
+
+   Two selectors, deliberately: the media query serves "match my system", the
+   attribute serves an explicit choice, and :not([data-theme="light"]) stops
+   the system preference overriding someone who asked for light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg-primary: oklch(0.165 0.012 285);
+    --bg-overlay: oklch(0.205 0.014 285);
+    --bg-surface: oklch(0.23 0.014 285);
+    --bg-inset: oklch(0.185 0.012 285);
+    --bg-elevated: oklch(0.26 0.016 285);
+
+    --text-primary: oklch(0.95 0.008 85);
+    --text-secondary: oklch(0.78 0.012 85);
+    --text-tertiary: oklch(0.62 0.012 285);
+
+    --accent: oklch(0.68 0.19 265);
+    --accent-hover: oklch(0.76 0.17 265);
+    --accent-subtle: oklch(0.68 0.19 265 / 0.16);
+    --accent-surface: oklch(0.68 0.19 265 / 0.09);
+
+    --success: oklch(0.72 0.17 155);
+    --success-ink: oklch(0.84 0.15 155);
+    --success-subtle: oklch(0.72 0.17 155 / 0.16);
+    --warning: oklch(0.80 0.15 80);
+    --warning-ink: oklch(0.88 0.13 80);
+    --warning-subtle: oklch(0.80 0.15 80 / 0.16);
+    --error: oklch(0.68 0.19 25);
+    --error-ink: oklch(0.82 0.16 25);
+    --error-subtle: oklch(0.68 0.19 25 / 0.16);
+
+    --border: oklch(0.30 0.012 285);
+    --border-active: oklch(0.42 0.014 285);
+    --bg-topbar: oklch(0.165 0.012 285 / 0.92);
+
+    /* the terminal stays the darkest thing on the page, so code still reads
+       as a distinct object instead of merging into the background */
+    --terminal-bg: oklch(0.125 0.012 285);
+    --terminal-text: oklch(0.94 0.01 85);
+    --terminal-muted: oklch(0.60 0.02 285);
+
+    /* shadows do almost nothing on dark; borders carry the elevation */
+    --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.5);
+    --shadow-md: 0 2px 6px oklch(0 0 0 / 0.5), 0 8px 32px oklch(0 0 0 / 0.35);
+    --shadow-lg: 0 4px 12px oklch(0 0 0 / 0.55), 0 16px 48px oklch(0 0 0 / 0.45);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-primary: oklch(0.165 0.012 285);
+  --bg-overlay: oklch(0.205 0.014 285);
+  --bg-surface: oklch(0.23 0.014 285);
+  --bg-inset: oklch(0.185 0.012 285);
+  --bg-elevated: oklch(0.26 0.016 285);
+
+  --text-primary: oklch(0.95 0.008 85);
+  --text-secondary: oklch(0.78 0.012 85);
+  --text-tertiary: oklch(0.62 0.012 285);
+
+  --accent: oklch(0.68 0.19 265);
+  --accent-hover: oklch(0.76 0.17 265);
+  --accent-subtle: oklch(0.68 0.19 265 / 0.16);
+  --accent-surface: oklch(0.68 0.19 265 / 0.09);
+
+  --success: oklch(0.72 0.17 155);
+  --success-ink: oklch(0.84 0.15 155);
+  --success-subtle: oklch(0.72 0.17 155 / 0.16);
+  --warning: oklch(0.80 0.15 80);
+  --warning-ink: oklch(0.88 0.13 80);
+  --warning-subtle: oklch(0.80 0.15 80 / 0.16);
+  --error: oklch(0.68 0.19 25);
+  --error-ink: oklch(0.82 0.16 25);
+  --error-subtle: oklch(0.68 0.19 25 / 0.16);
+
+  --border: oklch(0.30 0.012 285);
+  --border-active: oklch(0.42 0.014 285);
+  --bg-topbar: oklch(0.165 0.012 285 / 0.92);
+
+  --terminal-bg: oklch(0.125 0.012 285);
+  --terminal-text: oklch(0.94 0.01 85);
+  --terminal-muted: oklch(0.60 0.02 285);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.5);
+  --shadow-md: 0 2px 6px oklch(0 0 0 / 0.5), 0 8px 32px oklch(0 0 0 / 0.35);
+  --shadow-lg: 0 4px 12px oklch(0 0 0 / 0.55), 0 16px 48px oklch(0 0 0 / 0.45);
 }
 
 * {
