@@ -7,3 +7,5 @@ packages/mx402/dist/
 *.tgz
 registry.json
 registry.offline.json
+ngrok.exe
+ngrok.zip

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeterX402 Connector Tester</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 32px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .input-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #333;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #5568d3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: #48bb78;
+    }
+    .btn-secondary:hover {
+      background: #38a169;
+    }
+    pre {
+      background: #f7fafc;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      border-left: 4px solid #667eea;
+    }
+    .result {
+      margin-top: 16px;
+    }
+    .service-item {
+      background: #f7fafc;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+      border-left: 4px solid #48bb78;
+    }
+    .service-item h3 {
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+    .service-item p {
+      color: #718096;
+      font-size: 14px;
+      margin: 4px 0;
+    }
+    .badge {
+      display: inline-block;
+      background: #edf2f7;
+      color: #4a5568;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-right: 6px;
+    }
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌐 MeterX402 Connector Tester</h1>
+
+    <div class="card">
+      <h2 style="margin-bottom: 16px">Quick Actions</h2>
+      <div class="quick-actions">
+        <button onclick="quickSearch('weather_forecast')">🌤️ Find Weather</button>
+        <button onclick="quickSearch('text_generation')">💬 Find LLMs</button>
+        <button onclick="quickSearch('blockchain_data')">⛓️ Find Blockchain</button>
+        <button onclick="listAll()">📋 List All</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom: 16px">1. Discover Services</h2>
+
+      <div class="input-group">
+        <label>Capability</label>
+        <input type="text" id="capability" placeholder="e.g., weather_forecast, text_generation, llm_inference">
+      </div>
+
+      <div class="input-group">
+        <label>Search Query</label>
+        <input type="text" id="query" placeholder="Optional: search term">
+      </div>
+
+      <div class="input-group">
+        <label>Min Reputation (0-100)</label>
+        <input type="number" id="minRep" min="0" max="100" placeholder="Optional">
+      </div>
+
+      <button id="searchBtn" onclick="searchServices()">🔍 Search Services</button>
+
+      <div id="searchResult" class="result"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom: 16px">2. Call a Service</h2>
+
+      <div class="input-group">
+        <label>Service ID</label>
+        <input type="text" id="serviceId" placeholder="e.g., weather, llm">
+      </div>
+
+      <div class="input-group">
+        <label>Method</label>
+        <select id="method">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>Path (with query string)</label>
+        <input type="text" id="path" placeholder="e.g., /?latitude=51.5&longitude=-0.1&hourly=temperature_2m">
+      </div>
+
+      <div class="input-group">
+        <label>Request Body (for POST)</label>
+        <textarea id="body" rows="3" placeholder='{"prompt": "Hello", "max_tokens": 50}'></textarea>
+      </div>
+
+      <div class="input-group">
+        <label>Max Price (HBAR)</label>
+        <input type="number" id="maxPrice" step="0.001" value="0.1" placeholder="0.1">
+      </div>
+
+      <button class="btn-secondary" id="callBtn" onclick="callService()">⚡ Call Service</button>
+
+      <div id="callResult" class="result"></div>
+    </div>
+  </div>
+
+  <script>
+    const CONNECTOR_URL = 'http://localhost:3402';
+
+    async function searchServices() {
+      const btn = document.getElementById('searchBtn');
+      const result = document.getElementById('searchResult');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Searching...';
+
+      try {
+        const params = new URLSearchParams();
+        const capability = document.getElementById('capability').value;
+        const query = document.getElementById('query').value;
+        const minRep = document.getElementById('minRep').value;
+
+        if (capability) params.set('capability', capability);
+        if (query) params.set('q', query);
+        if (minRep) params.set('minReputation', minRep);
+
+        const response = await fetch(`${CONNECTOR_URL}/services?${params}`);
+        const data = await response.json();
+
+        if (data.services && data.services.length > 0) {
+          let html = `<h3 style="margin-bottom:12px">Found ${data.services.length} service(s):</h3>`;
+          data.services.forEach(service => {
+            html += `
+              <div class="service-item">
+                <h3>${service.name}</h3>
+                <p>${service.description}</p>
+                <p>
+                  ${service.capabilities.map(c => `<span class="badge">${c}</span>`).join('')}
+                </p>
+                <p><strong>Price:</strong> ${service.price.amount} ${service.price.currency} per ${service.price.unit}</p>
+                <p><strong>ID:</strong> <code>${service.id}</code></p>
+                ${service.reputation ? `<p><strong>Reputation:</strong> ${service.reputation}/100</p>` : ''}
+              </div>
+            `;
+          });
+          result.innerHTML = html;
+        } else {
+          result.innerHTML = '<p>No services found. Try different filters or <a href="#" onclick="listAll(); return false;">list all services</a>.</p>';
+        }
+      } catch (error) {
+        result.innerHTML = `<pre style="color: red">Error: ${error.message}\n\nMake sure the connector is running on http://localhost:3402</pre>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🔍 Search Services';
+      }
+    }
+
+    async function callService() {
+      const btn = document.getElementById('callBtn');
+      const result = document.getElementById('callResult');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Calling...';
+
+      try {
+        const payload = {
+          service_id: document.getElementById('serviceId').value,
+          method: document.getElementById('method').value,
+          path: document.getElementById('path').value,
+          max_price: parseFloat(document.getElementById('maxPrice').value)
+        };
+
+        const bodyText = document.getElementById('body').value.trim();
+        if (bodyText && payload.method === 'POST') {
+          payload.request_body = bodyText;
+        }
+
+        const response = await fetch(`${CONNECTOR_URL}/call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        let html = '<h3>Response:</h3>';
+        if (data.success) {
+          html += '<div class="service-item" style="border-left-color: #48bb78;">';
+          html += '<h3 style="color: #48bb78;">✅ Success</h3>';
+          html += `<pre>${JSON.stringify(data.data, null, 2)}</pre>`;
+
+          if (data.receipt) {
+            html += '<h4 style="margin-top: 12px;">💰 Payment Receipt:</h4>';
+            html += `<p><strong>Amount:</strong> ${data.receipt.amount} ${data.receipt.currency}</p>`;
+            html += `<p><strong>Units:</strong> ${data.receipt.units} ${data.receipt.unit_type}</p>`;
+            if (data.receipt.transaction_id) {
+              html += `<p><strong>Transaction:</strong> <code>${data.receipt.transaction_id}</code></p>`;
+            }
+          }
+          html += '</div>';
+        } else {
+          html += `<div class="service-item" style="border-left-color: #f56565;">`;
+          html += '<h3 style="color: #f56565;">❌ Error</h3>';
+          html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+          html += '</div>';
+        }
+
+        result.innerHTML = html;
+      } catch (error) {
+        result.innerHTML = `<pre style="color: red">Error: ${error.message}</pre>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '⚡ Call Service';
+      }
+    }
+
+    function quickSearch(capability) {
+      document.getElementById('capability').value = capability;
+      document.getElementById('query').value = '';
+      document.getElementById('minRep').value = '';
+      searchServices();
+    }
+
+    function listAll() {
+      document.getElementById('capability').value = '';
+      document.getElementById('query').value = '';
+      document.getElementById('minRep').value = '';
+      searchServices();
+    }
+
+    // Load all services on page load
+    window.addEventListener('load', () => {
+      listAll();
+    });
+  </script>
+</body>
+</html>
