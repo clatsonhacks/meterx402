@@ -194,6 +194,60 @@ the on-chain allowance. After paying, the SDK re-hashes the body and re-meters i
 disagrees with the quote it files a **dispute**, which is anchored on HCS and costs the seller
 reputation.
 
+## Four things only Hedera makes easy
+
+**A portable agent identity (HCS-14).** Every service carries a Universal Agent ID:
+
+```
+uaid:aid:7JmaYYEJk7WfPKyQ1Tjpgd…;uid=weather;registry=meterx402;nativeId=hedera:testnet:0.0.10454509
+```
+
+It is a SHA-384 hash of six canonical fields — registry, name, version, protocol, the payout
+account as CAIP-10, and HCS-11 skill numbers — and deliberately *not* of the endpoint or the
+price, so the identity survives a move to a new host or a change of rate. The registry resolves
+it and **re-derives the hash to check the claim**: `GET /registry/agents/:uaid` answers
+`verified: true` only if the agent really is who it says. Nobody is trusted for that, because
+the id *is* the hash. (Ours matches `@hashgraphonline/standards-sdk` byte for byte; that is a
+test, not a hope.)
+
+**Settle in a token, and let consensus take the fee.**
+
+```bash
+npx tsx scripts/new-token.ts                  # creates MXC with a 2% fee in its schedule
+mx402 <api> --wallet <acct> --asset 0.0.10501361 --rate 0.01
+```
+
+The payment path does not change — same exact scheme, same facilitator — only the asset. The
+protocol's cut lives in the **token's custom fee schedule**, so the ledger routes it on every
+transfer: no fee-collection code in this repo, no contract, and no way for a seller to route
+around it. Live: a 0.24 MXC call credited the seller 0.2352 and the treasury 0.0048.
+
+**Subscriptions the seller can count before they land.** A tab is an allowance — permission,
+revocable, promising nothing. A subscription is the opposite: the buyer pre-signs every future
+payment as a Hedera scheduled transaction (`wait_for_expiry`), one per period.
+
+```bash
+mx402 <api> --wallet <acct> --subscribe 0.05 --period 604800 --sub-units 500
+```
+
+Consensus executes them unattended — measured at 0.1s after the due timestamp, with nothing of
+ours running. The gateway decodes each schedule off the mirror node and refuses anything that is
+not the buyer's own money; the buyer keeps the admin key and can cancel any period that has not
+run.
+
+**Quote rounds.** State the job and a ceiling instead of picking a service:
+
+```ts
+const round = await agent.rfq({ capability: "weather_forecast", maxUnits: 24, maxPrice: "0.05" });
+// every live seller answers; losers and their reasons are part of the record
+const r = await round.accept();
+```
+
+Estimates are free (nothing upstream runs); `binding: true` asks the shortlist for real 402s.
+Scored by ratio to the best in the round — price 0.45, reputation 0.4, latency 0.15 — so twice
+the price is half the score. Live, a proven seller beat an unrated rival at **half** the price,
+and a ceiling nobody could meet declined the whole field with its reasons.
+
 ## Registry and reputation
 
 `GET /registry/services?capability=weather_forecast&minReputation=90&maxPrice=0.05` returns

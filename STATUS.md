@@ -1,12 +1,12 @@
 # MeterX402 — project status
 
-_Last updated 2026-09-11._ One page covering what is done, what is not, and what to watch out
+_Last updated 2026-09-12._ One page covering what is done, what is not, and what to watch out
 for. The design is in [ARCHITECTURE.md](./ARCHITECTURE.md), and the reasoning behind the metering
 model is in [APPROACH.md](./APPROACH.md).
 
 **In one line:** a payment layer for APIs and AI agents. It does usage-based x402 payments on
 Hedera, with a service registry, reputation, Metered Tabs, streaming, and SDK / A2A / MCP / CLI
-interfaces. It works end to end on Hedera testnet against real third-party APIs, and **117
+interfaces. It works end to end on Hedera testnet against real third-party APIs, and **161
 automated tests pass**.
 
 ---
@@ -40,6 +40,16 @@ automated tests pass**.
 | 8 · Ranking by reputation, price and latency | ✅ (simple form) | `rank()` |
 | 9 · Buyer-side re-metering + automatic disputes | ✅ (minimal) | e2e with a dishonest seller |
 
+### Hedera-native extras
+| Feature | What it does | Status |
+|---|---|---|
+| **HCS-14 Universal Agent ID** | Every service carries a `uaid:aid:…` derived from six canonical fields (registry, name, version, protocol, Hedera account as CAIP-10, HCS-11 skills). Endpoints and prices are excluded, so identity survives a move or a price change. Rides on the descriptor, the A2A card and `x-mx402`. | ✅ live |
+| **The registry as a resolver** | `GET /registry/agents/:uaid` re-derives the hash from the descriptor and reports whether the claimed identity is genuine; `?uaid=` filters discovery. Nobody has to be trusted: for `uaid:aid` the id *is* the hash. | ✅ live |
+| **HTS settlement** | `--asset <token-id>` sells an API in an HTS token instead of HBAR. Same exact scheme, same facilitator; decimals, symbol and fee schedule are read from the token itself. | ✅ live (MXC `0.0.10501361`) |
+| **A protocol fee consensus collects** | The cut lives in the token's custom fee schedule, so the ledger routes it on every transfer. No fee-collection code, no contract, no way for a seller to route around it. Inclusive, so the buyer signs exactly the quote and the seller nets the rest — disclosed up front in `SettlementOption.fee`. | ✅ live (2% → `0.0.10452591`) |
+| **Subscriptions** | The buyer pre-signs one scheduled transfer per period (HIP-423, `wait_for_expiry`), so the seller can count committed revenue before it lands. The gateway decodes each schedule off the mirror node and refuses anything that is not the buyer's own money. The buyer keeps the admin key and can cancel unexecuted periods. | ✅ live |
+| **Quote rounds** | `POST /rfq`: state a capability, a size and a ceiling; every live seller answers at once, ranked by price 0.45 / reputation 0.4 / latency 0.15 as ratios to the best. Losers and their reasons are part of the record and of the reputation evidence. | ✅ live |
+
 ### Tooling
 | Item | Status |
 |---|---|
@@ -72,6 +82,10 @@ from `.env` (or a mock account offline). It is a demo wallet, not the visitor's.
 | Suite | Count |
 |---|---|
 | Unit: pricing, meters, holds, tabs, detection, protocol, registry, reputation | 62 |
+| Unit: HCS-14 identity (incl. byte-for-byte against the Standards SDK) | 11 |
+| Unit: HTS settlement and the ledger fee | 9 |
+| Unit: subscriptions and schedule verification | 13 |
+| Unit: quote rounds | 11 |
 | End-to-end: engine, tabs + streaming, full lifecycle (SDK, A2A, MCP, disputes, publish CLI) | 55 |
 | Live (manual): `npm run test:live`, `scripts/live-agent.ts` | pass on testnet |
 
@@ -86,7 +100,7 @@ In rough priority order.
 | 1 | Publish the npm package | `npx mx402` for everyone; the UI's MCP and CLI snippets assume it | needs `npm login`; the LICENSE and repo URL are in place |
 | 2 | Visitor wallets in the UI | today the playground pays from the hub's demo buyer | HashPack / WalletConnect signing in the browser |
 | 3 | Hosted deployment (a public hub + gateways) | today everything is `localhost` | Dockerfile / Railway template, `--public-url` |
-| 4 | USDC pricing on Hedera (HTS token) | budgets in a stable currency | the adapter supports assets; needs a funded USDC test account |
+| 4 | Tabs and subscriptions in an HTS token | today both settle HBAR only | token allowances, and a token transfer inside a schedule |
 | 5 | Live test of the EVM / Solana adapters | multi-chain is declared, not proven | needs `@x402/evm` / `@x402/svm` and funded wallets |
 | 6 | Owner-signed registry publishing | today: loopback or a shared token | sign descriptors with the payout account's key |
 | 7 | Federated / replicated registry | a single hub is a single point of failure | e.g. registry entries mirrored to an HCS topic |
@@ -110,8 +124,17 @@ In rough priority order.
 
 ### Technical
 - **Testnet only.** Nothing has run on mainnet.
-- **HBAR only.** Budgets and prices are in HBAR, so HBAR volatility over a long session is a real
-  risk.
+- **HBAR or one HTS token.** Pay-per-call settles in either; **tabs and subscriptions are HBAR
+  only** (allowances and the scheduled transfers we build are native-HBAR transfers). A buyer must
+  opt into a token explicitly (`assets: […]`) before the SDK will sign it.
+- **An HTS payout account must be associated with the token** before it can be paid, which is a
+  one-off the seller does themselves; x402's preflight reports `pay_to_not_associated` otherwise.
+- **Subscriptions reach ~62 days ahead** (HIP-423 caps how far a schedule may sit), so longer
+  commitments mean re-scheduling. A cancelled period is gone from the ledger, not refunded —
+  nothing was ever deposited.
+- **A quote round's estimates are estimates.** They come from the published rate card, because
+  asking every seller for a real quote would make them all do the work; only `binding: true`
+  produces exact prices, and only for the shortlist.
 - **Tokens are self-reported.** Re-metering proves a token count matches the body's own `usage`
   block, not the model's true work. Rows and bytes are verified exactly.
 - **The registry is a single process** with a JSON file. Reputation evidence is off-chain, and
@@ -150,6 +173,9 @@ In rough priority order.
 - The dashboard's "Units sold" shows "mixed" across units by design, and only sums per API.
 - After a hub restart, gateways that were already running re-register on their next heartbeat
   (up to 15s). Until then the registry shows their last-saved descriptor.
+- Quote-round evidence (`quote_rounds`, `quotes_offered`, `quote_rounds_won`) is reported in the
+  reputation record but deliberately not folded into the weighted score, so existing scores keep
+  their meaning.
 - The offline demo reuses the `BUYER_*` account id from `.env` on the mock ledger, which can
   look confusing next to live data.
 
@@ -165,6 +191,10 @@ npm run demo                  # live: open http://127.0.0.1:4021 (User / Deploye
 npm test                      # 117 tests
 npm run test:live             # live settlement + mirror-node checks
 npx tsx scripts/live-agent.ts # the whole lifecycle as an agent, live
+npx tsx scripts/new-token.ts        # once: the MXC credit token + its accounts
+npx tsx scripts/live-hts.ts         # settle in credits, with the ledger taking its cut
+npx tsx scripts/live-subscription.ts # pre-signed periods, executed by consensus
+npx tsx scripts/live-rfq.ts         # a competitive quote round
 ```
 
 Required `.env` for live mode: `WALLET`, `BUYER_ACCOUNT_ID`, `BUYER_PRIVATE_KEY`; optionally
