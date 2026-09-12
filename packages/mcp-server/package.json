@@ -1,0 +1,51 @@
+{
+  "name": "@meterx402/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for MeterX402 - pay-per-use API marketplace with metered pricing",
+  "type": "module",
+  "bin": {
+    "meterx402-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "llm",
+    "api",
+    "payment",
+    "hedera",
+    "metering",
+    "x402"
+  ],
+  "author": "MeterX402",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clatsonhacks/meterx402.git",
+    "directory": "packages/mcp-server"
+  },
+  "dependencies": {
+    "@hiero-ledger/sdk": "^2.85.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@x402/core": "2.25.0",
+    "@x402/fetch": "2.25.0",
+    "@x402/hedera": "2.25.0",
+    "hono": "^4.13.7",
+    "ws": "^8.18.0",
+    "zod": "^4.6.1"
+  },
+  "optionalDependencies": {
+    "@hashgraphonline/standards-sdk": "^0.1.186"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
