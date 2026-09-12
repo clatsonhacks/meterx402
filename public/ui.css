@@ -561,6 +561,7 @@ textarea:focus-visible {
 select,
 input[type='number'],
 input[type='text'],
+input[type='search'],
 textarea {
   width: 100%;
   background: var(--bg-inset);

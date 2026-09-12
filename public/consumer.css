@@ -103,6 +103,39 @@
 }
 .skip:focus { top: 12px; }
 
+/* ── deployer lane cards ─────────────────────────────────────────────────
+   .kv had no font-size, so labels and values both inherited the 15px body
+   and the card read as a wall of identical text. Labels step down, values
+   stay readable, and the headline rate keeps the emphasis. */
+.lane h3 { font-size: 14.5px; letter-spacing: -0.01em; }
+.lane .rate { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; margin: 2px 0 10px; }
+.kv { font-size: 12.5px; gap: 3px 14px; line-height: 1.5; }
+.kv span:nth-child(odd) { font-size: 11.5px; }
+.lane .field, .lane .check { font-size: 11.5px; }
+.lane .tabline .label, .lane .label { font-size: 11.5px; }
+.lane .tick { font-size: 11px; }
+.lane details summary { font-size: 12px; }
+.lane input[type='number'], .lane input[type='text'] { font-size: 12.5px; padding: 6px 9px; }
+.lane .primary { font-size: 12.5px; padding: 7px 13px; }
+
+/* ── the mode switch ─────────────────────────────────────────────────────
+   app.css makes every svg display:block, so without an explicit flex row the
+   icon sat on its own line and the control grew into a tall box. */
+.switch { padding: 3px; gap: 2px; }
+.switch button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 13.5px; font-weight: 600; line-height: 1.2; }
+.switch button svg { width: 14px; height: 14px; flex: none; }
+.topbar-in { min-height: 52px; }
+
+/* The service mark is the first thing read on a card: give it room. */
+.avatar { width: 40px; height: 40px; border-radius: 10px; }
+.avatar.cat svg { width: 22px; height: 22px; }
+.avatar.cat.big { width: 48px; height: 48px; }
+.avatar.cat.big svg { width: 26px; height: 26px; }
+.bid .avatar { width: 32px; height: 32px; }
+.bid .avatar.cat svg { width: 18px; height: 18px; }
+.act-row .avatar { width: 34px; height: 34px; }
+.act-row .avatar.cat svg { width: 19px; height: 19px; }
+
 /* ── screen-reader-only text ─────────────────────────────────────────── */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
