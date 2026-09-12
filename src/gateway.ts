@@ -73,6 +73,9 @@ export interface GatewayConfig {
   capabilities?: string[];     // what it does, e.g. weather_forecast (default: inferred)
   description?: string;
   title?: string;              // display name for people
+  /** Paths that are always free (a schema, a row count). They create no hold,
+   *  so the outstanding-quote limit must not gate them. */
+  freePaths?: string[];
   /** Dataset metadata, when this gateway fronts a file rather than an API. */
   dataset?: { rows: number; format: string; columns: { name: string; type: string }[] };
   unitLabel?: string;          // one unit in plain words, e.g. "forecast hour"
@@ -430,7 +433,11 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
       await send("rate_limited", reqId, { client, reason: "rpm" });
       return c.json({ error: "rate_limited", message: `more than ${cfg.rpm} unpaid requests per minute` }, 429, CORS);
     }
-    if (holds.countFor(client) >= (cfg.maxHolds ?? 3)) {
+    // A declared-free path never produces a quote, so outstanding quotes are
+    // not a reason to refuse it: a buyer three quotes deep must still be able
+    // to ask what a dataset holds and what the next query would cost. Rate
+    // limiting above still applies.
+    if (!(cfg.freePaths ?? []).includes(path) && holds.countFor(client) >= (cfg.maxHolds ?? 3)) {
       await send("rate_limited", reqId, { client, reason: "too_many_unpaid" });
       return c.json({ error: "too_many_unpaid_quotes", message: "pay or let your outstanding quotes expire first" }, 429, CORS);
     }

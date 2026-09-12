@@ -296,9 +296,22 @@ RECIPES.push({
     if (f.col && f.val) p.set("where", `${f.col}:${f.op}:${f.val}`);
     return { method: "GET", path: `/?${p.toString()}`, body: "" };
   },
-  // You pay for rows returned, so a filter that matches less costs less —
-  // the estimate is a ceiling, and the quote is the truth.
-  estimateUnits: (d, f) => Math.min(f.n, d.pricing.max_units ?? f.n),
+  // Priced by cells, so the columns you pick change the price as much as the
+  // row count does. The estimate is a ceiling; the quote is the truth.
+  estimateUnits: (d, f) => {
+    const cols = f.select.length || d.dataset.columns.length;
+    const units = /cells/.test(d.pricing.meter) ? f.n * cols : f.n;
+    return Math.min(units, d.pricing.max_units ?? units);
+  },
+  /** The free row count, so "what would this cost?" is answered before paying.
+   *  Through the hub, like every other call this page makes. */
+  count: async (d, f) => {
+    const p = new URLSearchParams({ service_id: d.service_id });
+    if (f.col && f.val) p.set("where", `${f.col}:${f.op}:${f.val}`);
+    if (f.select.length) p.set("select", f.select.join(","));
+    const r = await fetch(`/playground/count?${p.toString()}`).then((x) => x.json());
+    return r.ok === false ? {} : { matched: r.matched, of: r.of };
+  },
   render: (data, { d }) => {
     const o = asObject(data);
     const rows = Array.isArray(o?.rows) ? o.rows : largestArray(o);

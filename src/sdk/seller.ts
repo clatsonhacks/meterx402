@@ -33,6 +33,8 @@ export interface WrapOptions {
   title?: string;
   unitLabel?: string;
   dataset?: { rows: number; format: string; columns: { name: string; type: string }[] };
+  /** Paths that are always free, e.g. a dataset schema and row count. */
+  freePaths?: string[];
   port?: number;
   publicUrl?: string;
   registry?: string | null;        // hub URL to publish to (null = don't publish)
@@ -81,7 +83,7 @@ export async function wrap(o: WrapOptions): Promise<WrappedService> {
     chain: o.chain, asset: o.asset, facilitator: o.facilitator, headers: o.headers, query: o.query,
     sample: o.sample, sampleMethod: o.method, sampleBody: o.body,
     hub: o.registry === undefined ? undefined : o.registry,
-    serviceId: o.serviceId, capabilities: o.capabilities, description: o.description, title: o.title, unitLabel: o.unitLabel, dataset: o.dataset, publicUrl: o.publicUrl,
+    serviceId: o.serviceId, capabilities: o.capabilities, description: o.description, title: o.title, unitLabel: o.unitLabel, dataset: o.dataset, freePaths: o.freePaths, publicUrl: o.publicUrl,
     quiet: o.quiet, holdTtlSec: o.holdTtlSec, maxHolds: o.maxHolds, subscription: o.subscription,
     tab: o.tab ? {
       ledger: o.tab.mockLedgerUrl ? mockTabLedger(o.tab.mockLedgerUrl, o.tab.spenderId, parseHederaKey(o.tab.spenderKey)) : hederaTabLedger(o.tab.spenderId, o.tab.spenderKey),

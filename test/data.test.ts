@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseCsv, inferColumns, loadDataset, parseQuery, runQuery, serveDataset, type Dataset } from "../src/data.ts";
+import { parseCsv, inferColumns, loadDataset, parseQuery, runQuery, serveDataset, matching, stratifiedSample, type Dataset } from "../src/data.ts";
+import { countCells, makeMeter } from "../src/meters.ts";
 import { priceAtomic } from "../src/pricing.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "mx402-data-"));
@@ -139,5 +140,110 @@ test("/schema is free to read and says what the data is", async () => {
     const bad = await fetch(`${srv.url}/?where=nope`);
     assert.equal(bad.status, 400);
     assert.equal((await fetch(`${srv.url}/nowhere`)).status, 404);
+  } finally { await srv.close(); }
+});
+
+// ── paying for values, not records ───────────────────────────────────────
+test("cells counts what a row actually carries, so narrower is cheaper", () => {
+  const wide = { rows: [{ a: 1, b: 2, c: 3 }, { a: 4, b: 5, c: 6 }] };
+  const narrow = { rows: [{ a: 1 }, { a: 4 }] };
+  assert.equal(countCells(wide, "rows"), 6);
+  assert.equal(countCells(narrow, "rows"), 2, "two columns of the same two rows costs a third");
+  assert.equal(countCells({ rows: [] }, "rows"), 0);
+  assert.equal(countCells({ total: 9 }, "rows"), 0, "no rows, nothing to charge for");
+});
+
+test("the cells meter finds the rows under the usual envelopes", () => {
+  const m = makeMeter("cells:rows");
+  assert.equal(m.unit, "cells");
+  assert.equal(m.measure({ resJson: { rows: [{ a: 1, b: 2 }] }, reqBody: null, status: 200, resText: "", bytes: 0, ms: 0 }), 2);
+  // a bare array, and a scalar row, still count sensibly
+  assert.equal(countCells([{ a: 1, b: 2 }, { a: 3, b: 4 }]), 4);
+  assert.equal(countCells(["x", "y"]), 2);
+});
+
+// ── free quality signals ─────────────────────────────────────────────────
+test("columns carry range, spread and distinct count", () => {
+  const cols = inferColumns([
+    { city: "Chennai", temp: "30" }, { city: "London", temp: "10" },
+    { city: "Chennai", temp: "20" }, { city: "Tokyo", temp: "" },
+  ]);
+  const temp = cols.find((c) => c.name === "temp")!;
+  assert.equal(temp.min, 10);
+  assert.equal(temp.max, 30);
+  assert.equal(temp.mean, 20);
+  const city = cols.find((c) => c.name === "city")!;
+  assert.equal(city.distinct, 3, "three cities, four rows");
+  assert.equal(city.min, "Chennai");
+});
+
+test("a sample spread through the file, not the head", () => {
+  const rows = Array.from({ length: 90 }, (_, i) => ({ i }));
+  assert.deepEqual(stratifiedSample(rows, 3).map((r) => r.i), [0, 30, 60]);
+  assert.equal(stratifiedSample([{ i: 1 }], 3).length, 1, "a short file is returned whole");
+});
+
+// ── selling the answer instead of the data ───────────────────────────────
+const big: Dataset = {
+  name: "t", format: "json", bytes: 0, columns: [],
+  rows: [
+    { city: "Chennai", temp: 30 }, { city: "Chennai", temp: 34 },
+    { city: "London", temp: 10 }, { city: "London", temp: 16 }, { city: "Tokyo", temp: 22 },
+  ],
+};
+const qq = (s: string) => parseQuery(new URLSearchParams(s), { limit: 50, maxLimit: 100 });
+
+test("group and aggregate return one row per group", () => {
+  const r = runQuery(big, qq("group=city&agg=avg:temp,max:temp,count"));
+  assert.equal(r.grouped, true);
+  assert.equal(r.total, 3, "five readings become three answers");
+  const chennai = r.rows.find((x) => x.city === "Chennai")!;
+  assert.equal(chennai.avg_temp, 32);
+  assert.equal(chennai.max_temp, 34);
+  assert.equal(chennai.count, 2);
+});
+
+test("aggregating without grouping answers over everything", () => {
+  const r = runQuery(big, qq("agg=min:temp,max:temp,count"));
+  assert.equal(r.total, 1);
+  assert.deepEqual(r.rows[0], { min_temp: 10, max_temp: 34, count: 5 });
+});
+
+test("aggregates cost a fraction of the rows behind them", () => {
+  const answer = runQuery(big, qq("group=city&agg=avg:temp"));
+  const raw = runQuery(big, qq("limit=100"));
+  const cellsAnswer = answer.rows.reduce((n, r) => n + Object.keys(r).length, 0);
+  const cellsRaw = raw.rows.reduce((n, r) => n + Object.keys(r).length, 0);
+  assert.equal(cellsAnswer, 6, "three groups x (city + avg)");
+  assert.equal(cellsRaw, 10);
+  assert.ok(cellsAnswer < cellsRaw, "the seller keeps the data and the buyer pays less");
+});
+
+test("a bad aggregate says what the valid ones are", () => {
+  assert.throws(() => qq("agg=median:temp"), /bad aggregate/);
+  assert.throws(() => qq("agg=avg"), /needs a column/);
+});
+
+test("filters apply before grouping", () => {
+  const r = runQuery(big, qq("where=temp:gte:20&group=city&agg=count"));
+  assert.equal(r.total, 2, "London drops out entirely");
+});
+
+// ── asking the price before paying it ────────────────────────────────────
+test("matching() counts without paging, which is what /count answers", () => {
+  assert.equal(matching(big, qq("where=city:eq:London")).length, 2);
+  assert.equal(matching(big, qq("")).length, 5);
+});
+
+test("/count is free, and says what a page would be metered as", async () => {
+  const srv = await serveDataset(big, { defaultLimit: 2, maxLimit: 10 });
+  try {
+    const c = await fetch(`${srv.url}/count?where=city:eq:Chennai&select=city,temp`).then((r) => r.json() as any);
+    assert.equal(c.matched, 2);
+    assert.equal(c.of, 5);
+    assert.equal(c.columns_selected, 2);
+    assert.equal(c.cells_per_page, 4, "two rows of two columns");
+    assert.ok(!("rows" in c), "no rows, so the gateway serves it free");
+    assert.equal((await fetch(`${srv.url}/count?where=bad`)).status, 400);
   } finally { await srv.close(); }
 });

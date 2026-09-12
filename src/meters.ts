@@ -10,6 +10,8 @@
 //   tokens:output    output tokens only
 //   rows             items returned (GraphQL top-level lists, JSON arrays, {result:[...]})
 //   rows:<path>      length of the array at a dotted path, e.g. rows:data.pools
+//   cells            values returned: rows x the fields each row actually carries
+//   cells:<path>     the same, for the array at a dotted path
 //   bytes            response body size
 //   ms               upstream wall-clock time
 //   json:<path>      a number the upstream reports itself, e.g. json:usage.credits
@@ -208,6 +210,47 @@ export function clampGraphqlFirst(query: string, cap: number): string {
   return query.replace(/\bfirst\s*:\s*(\d+)/g, (_, n: string) => `first: ${Math.min(Number(n), cap)}`);
 }
 
+/** Values in a response, not records: a row of three fields costs three, and
+ *  the same row with eight costs eight.
+ *
+ *  This is the meter for anything a buyer can narrow by column. Selecting
+ *  `time,temp_c` out of eight columns should not cost what taking all eight
+ *  costs, and counting rows alone cannot express that. Ragged rows are counted
+ *  by what they each carry, so a sparse record is cheaper than a full one —
+ *  nulls that are present still count, because they were still returned. */
+export function countCells(res: unknown, path?: string): number {
+  const v = path ? getPath(res, path) : firstArray(res);
+  if (!Array.isArray(v)) return 0;
+  let n = 0;
+  for (const row of v) {
+    if (row == null) continue;
+    n += isObj(row) ? Object.keys(row).length : 1;   // a scalar row is one value
+  }
+  return n;
+}
+
+/** The array a response is really about, under the usual envelopes. */
+function firstArray(res: unknown): unknown[] | null {
+  if (Array.isArray(res)) return res;
+  if (!isObj(res)) return null;
+  for (const k of ["rows", "data", "result", "results", "items", "records", "entries"]) {
+    if (Array.isArray(res[k])) return res[k] as unknown[];
+  }
+  return null;
+}
+
+function cellsMeter(path?: string): Meter {
+  return {
+    spec: path ? `cells:${path}` : "cells",
+    unit: "cells",
+    measure: (i) => countCells(i.resJson, path),
+    clamp(req, cap) {
+      if (isObj(req) && typeof req.query === "string") return { ...req, query: clampGraphqlFirst(req.query, cap) };
+      return req;
+    },
+  };
+}
+
 function rowsMeter(path?: string): Meter {
   return {
     spec: path ? `rows:${path}` : "rows",
@@ -235,6 +278,8 @@ export function makeMeter(spec = "request"): Meter {
       return tokensMeter(arg === "output" ? "output" : "total");
     case "rows":
       return rowsMeter(arg || undefined);
+    case "cells":
+      return cellsMeter(arg || undefined);
     case "bytes":
       return {
         spec, unit: "bytes", measure: (i) => i.bytes,
@@ -250,6 +295,6 @@ export function makeMeter(spec = "request"): Meter {
     case "flat":
       return { spec: "request", unit: "requests", measure: () => 1 };
     default:
-      throw new Error(`unknown meter "${spec}". try: tokens, tokens:output, rows, rows:<path>, bytes, ms, json:<path>, request`);
+      throw new Error(`unknown meter "${spec}". try: tokens, tokens:output, rows, rows:<path>, cells, cells:<path>, bytes, ms, json:<path>, request`);
   }
 }

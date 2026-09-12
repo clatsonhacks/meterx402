@@ -322,15 +322,23 @@ ${bold("mx402 data")} ${dim(file)}
   }
   if (ds.columns.length > 12) console.log(dim(`  … and ${ds.columns.length - 12} more`));
 
-  const rate = flag("rate", "0.0001")!;
+  // Cells, not rows: a buyer taking two columns out of eight should not pay
+  // what taking all eight costs. --per-row opts back into row pricing.
+  const byRow = argv.includes("--per-row");
+  const meter = byRow ? "rows:rows" : "cells:rows";
+  const unitLabel = byRow ? "row" : "cell";
+  const cols = ds.columns.length;
+  const rate = flag("rate", byRow ? "0.0001" : "0.00002")!;
   const perCall = Number(flag("limit", "50"));
   const maxRows = Number(flag("max-rows", "1000"));
+  const maxUnits = byRow ? maxRows : maxRows * cols;
   const price = (n: number) => priceOf(n, { rate, per: 1, min: "0" });
-  console.log(`
-${bold("What buyers would pay")}`);
-  console.log(`  a ${perCall}-row page      ${bold(price(perCall).padStart(12))} HBAR`);
-  console.log(`  the whole dataset  ${bold(price(ds.rows.length).padStart(12))} HBAR ${dim(`(${ds.rows.length.toLocaleString()} rows, over ${Math.ceil(ds.rows.length / maxRows)} calls)`)}`);
-  console.log(dim(`  the schema and a 3-row sample are free: zero rows metered, so nothing to pay`));
+  const units = (rows: number, selected = cols) => (byRow ? rows : rows * selected);
+  console.log(`\n${bold("What buyers would pay")} ${dim(byRow ? "(per row)" : `(per cell — a row of ${cols} columns is ${cols} cells)`)}`);
+  console.log(`  a ${perCall}-row page, every column   ${bold(price(units(perCall)).padStart(12))} HBAR`);
+  if (!byRow) console.log(`  the same page, 2 columns       ${bold(price(units(perCall, 2)).padStart(12))} HBAR ${dim("← narrower is cheaper")}`);
+  console.log(`  the whole dataset              ${bold(price(units(ds.rows.length)).padStart(12))} HBAR ${dim(`(${ds.rows.length.toLocaleString()} rows over ${Math.ceil(ds.rows.length / maxRows)} calls)`)}`);
+  console.log(dim(`  /schema and /count are free: they carry no rows, so there is nothing to meter`));
 
   const data = await serveDataset(ds, { defaultLimit: perCall, maxLimit: maxRows });
   const title = flag("title") ?? ds.name.replace(/[-_]+/g, " ").replace(/\w/g, (c) => c.toUpperCase());
@@ -341,12 +349,13 @@ ${bold("What buyers would pay")}`);
     upstream: data.url,
     sample: `/?limit=${perCall}`,
     wallet,
-    meter: "rows:rows",
-    rate, per: 1, min: flag("min", "0"), maxUnits: maxRows,
+    meter,
+    rate, per: 1, min: flag("min", "0"), maxUnits,
     name, title,
-    unitLabel: "row",
-    description: flag("description") ?? `${ds.rows.length.toLocaleString()} rows of ${title.toLowerCase()}, queryable and priced per row returned.`,
+    unitLabel,
+    description: flag("description") ?? `${ds.rows.length.toLocaleString()} rows and ${cols} columns of ${title.toLowerCase()}, queryable and priced per ${unitLabel} returned.`,
     capabilities: (flag("capability") ? [flag("capability")!] : ["dataset"]),
+    freePaths: ["/schema", "/count"],
     dataset: { rows: ds.rows.length, format: ds.format, columns: ds.columns.map((c) => ({ name: c.name, type: c.type })) },
     port: Number(flag("port", "0")) || undefined,
     registry,
@@ -357,7 +366,8 @@ ${bold("What buyers would pay")}`);
   console.log(`
 ${bold("Buyers call")}`);
   console.log(`  ${dim("free  ")} curl ${svc.url}/schema`);
-  console.log(`  ${dim("paid  ")} curl '${svc.url}/?limit=10&where=${ds.columns[0]?.name}:contains:a&sort=${ds.columns[0]?.name}'`);
+  console.log(`  ${dim("free  ")} curl '${svc.url}/count?where=${ds.columns[0]?.name}:contains:a'   ${dim("how many match, before paying")}`);
+  console.log(`  ${dim("paid  ")} curl '${svc.url}/?limit=10&select=${ds.columns.slice(0, 2).map((c) => c.name).join(",")}'`);
   console.log(`
 ${dim("Ctrl-C to stop serving. The dataset stays on this machine; only the rows a buyer pays for leave it.")}
 `);
