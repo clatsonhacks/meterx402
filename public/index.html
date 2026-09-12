@@ -69,7 +69,7 @@
             <label>Service<select id="pg-service"></select></label>
             <div class="label" style="margin-top:6px">Integration</div>
             <div class="integ" id="pg-integ"></div>
-            <div class="label" style="margin-top:8px">Request</div>
+            <div class="label" style="margin-top:6px">Request</div>
             <div class="trio"><label>Method<select id="pg-method"><option>GET</option><option>POST</option></select></label><label>Path and query<input type="text" id="pg-path"></label></div>
             <label>Body<textarea id="pg-body" rows="4"></textarea></label>
             <div class="pair">
@@ -84,7 +84,7 @@
             <div class="snippet nolbl" id="pg-code"></div>
             <div class="runbar"><button class="primary" id="pg-run">Run</button><span class="label" id="pg-runnote"></span></div>
           </div>
-          <div class="card" id="pg-out" style="margin-top:12px" hidden></div>
+          <div class="card" id="pg-out" style="margin-top:10px" hidden></div>
         </div>
       </div>
     </div>
@@ -92,8 +92,8 @@
 
   <!-- ═══════════════════════════ DEPLOYER ═══════════════════════════ -->
   <section class="view" id="view-deployer" hidden>
-    <div class="toolbar" style="margin-bottom:14px">
-      <div><div class="lede" style="margin:0">Your services</div><span class="lede-sub" style="margin:0">Publish APIs, set prices, watch metered income settle on Hedera.</span></div>
+    <div class="toolbar" style="margin-bottom:10px">
+      <div><div class="lede" style="margin:0 0 2px 0">Your services</div><span class="lede-sub" style="margin:0">Publish APIs, set prices, watch metered income settle on Hedera.</span></div>
       <span class="spacer"></span>
       <span class="field" style="flex-direction:row;align-items:center;gap:8px">Payout wallet
         <input type="text" id="owner" placeholder="all wallets (0.0.x / 0x…)" style="width:220px"></span>
@@ -123,8 +123,8 @@
         </div>
         <div>
           <div id="pub-result" class="label">Check an API to see what it would be metered on and what calls would cost. Nothing is charged.</div>
-          <div class="snippet" id="pub-cli" style="margin-top:12px"></div>
-          <div id="pub-list" style="margin-top:12px"></div>
+          <div class="snippet" id="pub-cli" style="margin-top:10px"></div>
+          <div id="pub-list" style="margin-top:10px"></div>
         </div>
       </div>
     </details>
@@ -146,7 +146,7 @@
       </div>
       <div class="card">
         <div class="label">Calls by hour (UTC)</div>
-        <svg class="chart" id="c-hours" role="img" aria-label="Paid calls by hour of day" style="height:196px"></svg>
+        <svg class="chart" id="c-hours" role="img" aria-label="Paid calls by hour of day" style="height:140px"></svg>
       </div>
     </div>
   </div>
@@ -164,7 +164,7 @@
         <thead><tr><th>service</th><th>capabilities</th><th>price</th><th>interfaces</th><th>reputation</th><th class="num">paid calls</th><th class="num">median ms</th><th class="num">uptime</th><th class="num">disputes</th></tr></thead>
         <tbody id="registry"><tr><td colspan="9" class="empty">No services registered yet</td></tr></tbody>
       </table>
-      <div class="sub" id="anchor-note" style="margin-top:8px"></div>
+      <div class="sub" id="anchor-note" style="margin-top:6px"></div>
     </div>
   </div>
 

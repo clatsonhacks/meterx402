@@ -146,7 +146,7 @@ function niceMax(v, integer = false) {
 
 /** Column chart: 4px rounded data-end, square baseline, <=24px thick, 2px surface gap, hover per mark. */
 function columns(svg, items, { value, tipHtml, ref, xLabels, integer }) {
-  const W = svg.clientWidth || 600, H = svg.clientHeight || 220, L = 48, R = 8, T = 14, B = 22;
+  const W = svg.clientWidth || 600, H = svg.clientHeight || 160, L = 48, R = 8, T = 10, B = 18;
   const vals = items.map(value);
   const max = niceMax(Math.max(...vals, ref ?? 0, 0), integer);
   const y = (v) => T + (H - T - B) * (1 - v / max);
