@@ -42,6 +42,7 @@ const ICONS = {
   repeat: '<path d="m17 2.5 3.5 3.5-3.5 3.5"/><path d="M3.5 11.5v-1a4 4 0 0 1 4-4h13"/><path d="m7 21.5-3.5-3.5L7 14.5"/><path d="M20.5 12.5v1a4 4 0 0 1-4 4h-13"/>',
   landmark: '<path d="M3 21.5h18M5.5 21.5V11M9.5 21.5V11M14.5 21.5V11M18.5 21.5V11"/><path d="M12 2.5 21 8.5H3Z"/>',
   package: '<path d="M20.5 8.2a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4a2 2 0 0 0-1 1.7v7.6a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.5 7.5 8.5 5 8.5-5M12 21.5v-9M7.7 4.8l8.6 5"/>',
+  droplet: '<path d="M12 2.8s6.5 7 6.5 11.7a6.5 6.5 0 0 1-13 0C5.5 9.8 12 2.8 12 2.8Z"/><path d="M9 15a3 3 0 0 0 3 3"/>',
   grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
   sparkles: '<path d="M12 3l1.9 5.3a2 2 0 0 0 1.3 1.3L20.5 11.5l-5.3 1.9a2 2 0 0 0-1.3 1.3L12 20l-1.9-5.3a2 2 0 0 0-1.3-1.3L3.5 11.5l5.3-1.9a2 2 0 0 0 1.3-1.3Z"/>',
   star: '<path d="m12 3 2.7 5.5 6 .9-4.35 4.25L17.4 20 12 17.1 6.6 20l1.05-6.35L3.3 9.4l6-.9Z"/>',
@@ -128,6 +129,8 @@ const CATS = {
   onchain_analytics: { label: "DeFi", icon: "repeat", hue: 320 },
   dao_governance: { label: "Governance", icon: "landmark", hue: 10 },
   file_download: { label: "Files", icon: "package", hue: 28 },
+  dex_liquidity: { label: "DEX Pools", icon: "droplet", hue: 290 },
+  dex_quote: { label: "Swaps", icon: "repeat", hue: 330 },
 };
 const ACRONYMS = { llm: "LLM", ai: "AI", api: "API", eth: "ETH", dao: "DAO", nft: "NFT", usd: "USD" };
 const prettyName = (s) => String(s ?? "").split(/[\s_-]+/).filter(Boolean).map((w) => ACRONYMS[w.toLowerCase()] ?? w[0].toUpperCase() + w.slice(1)).join(" ");
@@ -199,6 +202,23 @@ const hbar = (h) => `${fmt(h)} HBAR`;
 const money = (h) => (usdOf(h) == null ? hbar(h) : `${hbar(h)} <span class="usd">≈ ${usdText(usdOf(h))}</span>`);
 /** "under 1¢" style phrase for a typical cost */
 const centsPhrase = (h) => { const u = usdOf(h); return u == null ? "" : u < 0.01 ? "under 1¢" : `about ${usdText(u)}`; };
+
+// The same, for whatever a service settles in: HBAR on Hedera, USDC on Base
+// and Solana. USDC is already dollars, so it needs no exchange rate.
+const curOf = (l) => l?.price?.currency ?? l?.descriptor?.payment?.settlement?.[0]?.currency ?? "HBAR";
+const isUsd = (c) => /^USD/i.test(String(c ?? ""));
+const amt = (h, c = "HBAR") => `${fmt(h)} ${c}`;
+const moneyIn = (h, c = "HBAR") => (isUsd(c) ? amt(h, c) : money(h));
+const centsIn = (h, c = "HBAR") => { const u = isUsd(c) ? Number(h) : usdOf(h); return u == null ? "" : u < 0.01 ? "under 1¢" : `about ${usdText(u)}`; };
+/** Where a payment settled, in words and as an explorer link. */
+const SOLANA_DEVNET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+const chainName = (network) => !network || network.startsWith("hedera:") ? "Hedera"
+  : network === "eip155:84532" ? "Base Sepolia" : network === "eip155:8453" ? "Base"
+  : network === SOLANA_DEVNET ? "Solana devnet" : network.startsWith("solana:") ? "Solana" : network;
+const txUrl = (tx, network) => !network || network.startsWith("hedera:") ? hashscanTx(tx)
+  : network === "eip155:84532" ? `https://sepolia.basescan.org/tx/${tx}` : network.startsWith("eip155:") ? `https://basescan.org/tx/${tx}`
+  : `https://solscan.io/tx/${tx}${network === SOLANA_DEVNET ? "?cluster=devnet" : ""}`;
+const explorerName = (network) => !network || network.startsWith("hedera:") ? "HashScan" : network.startsWith("solana:") ? "Solscan" : "BaseScan";
 
 // ── trust ───────────────────────────────────────────────────────────────
 function trustOf(r) {

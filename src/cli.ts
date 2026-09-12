@@ -62,6 +62,7 @@ export async function cli(argv: string[]): Promise<void> {
   if (cmd === "publish") return publish(argv.slice(1));
   if (cmd === "inspect") return inspect(argv.slice(1));
   if (cmd === "wallet") return wallet(argv.slice(1));
+  if (cmd === "analyst") return analyst(argv.slice(1));
   return serve(argv);
 }
 
@@ -295,6 +296,44 @@ ${dim("  Ctrl+C to stop selling.")}
 // A dataset is rows, and rows is the meter this project counts best. So a file
 // becomes a queryable, metered API with the same machinery as any other
 // service: same descriptor, same registry, same receipts.
+
+// ── mx402 analyst ─────────────────────────────────────────────────────────
+// An agent that pays for its own research: an LLM plans the query, The Graph's
+// standardized DEX subgraphs supply the pools, the Uniswap Trading API prices
+// the trade, the LLM writes the answer. Each step settles over x402 from
+// BUYER_* within --budget, and the report lists every receipt.
+
+async function analyst(argv: string[]): Promise<void> {
+  const valueFlags = new Set(["--max-pools", "--budget", "--registry"]);
+  const flag = (n: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : undefined; };
+  const question = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && valueFlags.has(argv[i - 1]))).join(" ").trim();
+  if (!question) {
+    console.error('usage: mx402 analyst "where can USDC earn the most fees against ETH?" [--max-pools 10] [--no-quote] [--budget "1 HBAR"] [--json]');
+    process.exit(1);
+  }
+  const { loadEnv } = await import("./env.ts");
+  loadEnv();
+  const { HUB_URL } = await import("./events.ts");
+  const { MeterX402 } = await import("./sdk/buyer.ts");
+  const accountId = process.env.BUYER_ACCOUNT_ID ?? process.env.HEDERA_ACCOUNT_ID;
+  const privateKey = process.env.BUYER_PRIVATE_KEY ?? process.env.HEDERA_PRIVATE_KEY;
+  if (!accountId || !privateKey) { console.error(`${red("✖")} no buyer wallet: set BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY`); process.exit(1); }
+  const json = argv.includes("--json");
+  const mx = new MeterX402({
+    wallet: { accountId, privateKey },
+    registry: (flag("registry") ?? HUB_URL).replace(/\/+$/, ""),
+    budget: flag("budget") ?? process.env.BUYER_BUDGET ?? "1 HBAR",
+  });
+  const { analyze, renderReport } = await import("./graph/analyst.ts");
+  const labels: Record<string, string> = { plan: "planning the query (LLM, per token)", pools: "reading pools (The Graph, per pool)", quote: "pricing the trade (Uniswap API, per quote)", answer: "writing the answer (LLM, per token)" };
+  const r = await analyze(question, {
+    buyer: mx,
+    maxPools: flag("max-pools") ? Number(flag("max-pools")) : undefined,
+    quote: argv.includes("--no-quote") ? false : undefined,
+    onStep: (s) => { if (!json) console.error(dim(`… ${labels[s] ?? s}`)); },
+  });
+  console.log(json ? JSON.stringify(r, null, 2) : `\n${renderReport(r)}\n`);
+}
 
 async function data(argv: string[]): Promise<void> {
   const { loadDataset, serveDataset } = await import("./data.ts");

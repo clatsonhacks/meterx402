@@ -84,6 +84,55 @@ function summarize(r: import("./sdk/buyer.ts").CallResult) {
 
 const server = new McpServer({ name: "meterx402", version: "0.2.0" });
 
+// ── The Graph + Uniswap: paid onchain data for agents ──────────────────────
+server.tool(
+  "find_dex_pools",
+  "Liquidity pools across DEXes and chains from The Graph's standardized (Messari DEX AMM) subgraphs: Uniswap v3 on Ethereum, Arbitrum, Base, Optimism, Polygon, BSC and Celo, plus SushiSwap, PancakeSwap, Curve, Balancer, Camelot and Velodrome, in one shape (TVL, 24h volume, fee, fee APR). Paid per pool returned via x402, within the budget. Use it to find where a pair is deepest or where liquidity earns the most fees.",
+  {
+    tokens: z.array(z.string()).max(2).optional().describe("Pool must hold all of these, e.g. [\"USDC\",\"ETH\"]"),
+    chains: z.array(z.string()).optional().describe("e.g. [\"base\",\"arbitrum\"]; empty = all"),
+    protocols: z.array(z.string()).optional().describe("e.g. [\"uniswap-v3\",\"curve-finance\"]; empty = all"),
+    sort: z.enum(["tvl", "volume", "fee_apr"]).optional(),
+    min_tvl_usd: z.number().nonnegative().optional(),
+    first: z.number().int().min(1).max(50).optional().describe("Rows to buy (each is billed)"),
+  },
+  async ({ tokens, chains, protocols, sort, min_tvl_usd, first }) => {
+    const mx = await buyer();
+    if (!mx) return noWallet();
+    const query: Record<string, string> = { sort: sort ?? "tvl", first: String(first ?? 10) };
+    if (tokens?.length) query.tokens = tokens.join(",");
+    if (chains?.length) query.chains = chains.join(",");
+    if (protocols?.length) query.protocols = protocols.join(",");
+    if (min_tvl_usd != null) query.min_tvl = String(min_tvl_usd);
+    try {
+      return text(summarize(await mx.call("dex-pools", { path: "/pools", method: "GET", query, maxUnits: first ?? 10 })));
+    } catch (e) {
+      return text(e instanceof BudgetError ? `Not paid: ${e.message}` : `Failed: ${String((e as Error)?.message ?? e)}`, true);
+    }
+  },
+);
+
+server.tool(
+  "ask_dex_analyst",
+  "Ask a DeFi liquidity question in plain words, e.g. \"where can USDC earn the most fees against ETH?\" or \"swap $5k USDC to ETH on the deepest chain\". An agent pays for each step with x402: LLM tokens to plan, The Graph standardized DEX subgraphs per pool, the Uniswap Trading API per quote, LLM tokens to write the answer. Returns the answer, the computed facts it rests on, and every receipt.",
+  {
+    question: z.string().min(3),
+    max_pools: z.number().int().min(1).max(20).optional().describe("Cap on pools bought (default 10)"),
+    with_quote: z.boolean().optional().describe("Allow the Uniswap quote step (default true)"),
+  },
+  async ({ question, max_pools, with_quote }) => {
+    const mx = await buyer();
+    if (!mx) return noWallet();
+    try {
+      const { analyze, renderReport } = await import("./graph/analyst.ts");
+      const r = await analyze(question, { buyer: mx, maxPools: max_pools, quote: with_quote === false ? false : undefined });
+      return text(renderReport(r));
+    } catch (e) {
+      return text(String((e as Error)?.message ?? e), true);
+    }
+  },
+);
+
 server.tool(
   "list_services",
   "Discover paid services on MeterX402 by what they do. Services are priced by what a call consumes (tokens, rows, bytes…), carry a reputation score computed from their settlement and performance history, and are ranked best-first. Use get_quote or call_service next.",

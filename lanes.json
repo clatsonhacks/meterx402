@@ -167,6 +167,84 @@
         "market_data"
       ],
       "unitLabel": "quote"
+    },
+    {
+      "name": "dex-pools",
+      "title": "DEX Pools Everywhere",
+      "_note": "The Graph: one Messari-standardized query over Uniswap v3 (7 chains), SushiSwap, PancakeSwap, Curve, Balancer, Camelot, Velodrome. serve.ts starts src/graph/server.ts when GRAPH_API_KEY is set.",
+      "upstream": "${MX_GRAPH_URL}",
+      "meter": "rows:pools",
+      "rate": "0.0005",
+      "min": "0.001",
+      "maxUnits": 100,
+      "port": 4131,
+      "sample": "/pools?tokens=USDC,ETH&first=10&sort=fee_apr",
+      "description": "Liquidity pools across DEXes and chains from The Graph's standardized subgraphs: TVL, 24h volume, fee and fee APR in one shape. Priced per pool returned.",
+      "capabilities": [
+        "dex_liquidity",
+        "onchain_analytics"
+      ],
+      "unitLabel": "pool"
+    },
+    {
+      "name": "dex-pools-base",
+      "title": "DEX Pools · USDC on Base",
+      "_note": "The same Graph data, settled in USDC on Base Sepolia (x402 exact, EIP-3009). Skipped until WALLET_EVM is set (scripts/new-chain-wallets.ts).",
+      "upstream": "${MX_GRAPH_URL}",
+      "meter": "rows:pools",
+      "rate": "0.00005",
+      "min": "0.0001",
+      "maxUnits": 100,
+      "port": 4132,
+      "chain": "base-sepolia",
+      "wallet": "${WALLET_EVM}",
+      "sample": "/pools?tokens=USDC,ETH&first=10&sort=tvl",
+      "description": "Standardized DEX pool data from The Graph, paid in USDC on Base Sepolia. Priced per pool returned.",
+      "capabilities": [
+        "dex_liquidity",
+        "onchain_analytics"
+      ],
+      "unitLabel": "pool"
+    },
+    {
+      "name": "uniswap-quote",
+      "title": "Uniswap Swap Quotes",
+      "_note": "Uniswap Trading API POST /quote (trade-api.gateway.uniswap.org). Needs UNISWAP_API_KEY. One price per routed quote.",
+      "upstream": "https://trade-api.gateway.uniswap.org/v1",
+      "meter": "request",
+      "rate": "0.002",
+      "port": 4133,
+      "method": "POST",
+      "sample": "/quote",
+      "body": "{\"type\":\"EXACT_INPUT\",\"amount\":\"1000000000\",\"tokenInChainId\":8453,\"tokenOutChainId\":8453,\"tokenIn\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"tokenOut\":\"0x4200000000000000000000000000000000000006\",\"swapper\":\"0x000000000000000000000000000000000000dEaD\",\"slippageTolerance\":0.5,\"routingPreference\":\"BEST_PRICE\"}",
+      "headers": {
+        "x-api-key": "${UNISWAP_API_KEY}"
+      },
+      "description": "Executable swap quotes from the Uniswap Trading API on 20+ chains: route, output, price impact and gas in USD. One flat price per quote.",
+      "capabilities": [
+        "dex_quote",
+        "market_data"
+      ],
+      "unitLabel": "quote"
+    },
+    {
+      "name": "weather-solana",
+      "title": "Weather · USDC on Solana",
+      "_note": "Open-Meteo, settled in USDC on Solana devnet (x402 exact, SPL transfer, facilitator pays fees). Skipped until WALLET_SOLANA is set.",
+      "upstream": "https://api.open-meteo.com/v1/forecast",
+      "meter": "rows:hourly.time",
+      "rate": "0.00001",
+      "min": "0.0001",
+      "maxUnits": 240,
+      "port": 4134,
+      "chain": "solana-devnet",
+      "wallet": "${WALLET_SOLANA}",
+      "sample": "/?latitude=13.0827&longitude=80.2707&hourly=temperature_2m&forecast_days=2",
+      "description": "Hourly Open-Meteo forecasts paid in USDC on Solana devnet. Priced per forecast hour returned.",
+      "capabilities": [
+        "weather_forecast"
+      ],
+      "unitLabel": "forecast hour"
     }
   ]
 }

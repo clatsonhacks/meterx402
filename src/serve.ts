@@ -33,6 +33,8 @@ export interface LaneSpec {
   maxUnits?: number;
   port: number;
   chain?: string;
+  /** Payout address for this lane when it settles somewhere else (e.g. ${WALLET_EVM}). */
+  wallet?: string;
   sample?: string;
   method?: string;
   body?: string;
@@ -94,7 +96,10 @@ export function laneArgs(lane: LaneSpec, wallet: string, tabsPossible = false): 
   const s = (v: unknown) => (v == null ? null : interpolate(String(v)));
   const upstream = s(lane.upstream);
   if (upstream == null) return null;
-  const args = [upstream, "--name", lane.name, "--port", String(lane.port), "--wallet", wallet];
+  // an EVM or Solana lane pays out to its own address; skip it until that is set
+  const payout = lane.wallet != null ? s(lane.wallet) : wallet;
+  if (!payout) return null;
+  const args = [upstream, "--name", lane.name, "--port", String(lane.port), "--wallet", payout];
   // No meter stated? Leave the flag off and let the CLI detect it from the API.
   if (lane.meter) args.push("--meter", lane.meter);
   if (lane.rate != null) args.push("--rate", String(lane.rate));
@@ -154,6 +159,14 @@ async function main() {
   else hubArgs.push("--tape", process.env.TAPE_FILE ?? (OFFLINE ? "tape.offline.jsonl" : "tape.jsonl"));
   child("hub", "src/hub.ts", hubArgs, extraEnv);
   await waitFor(`${HUB_URL}/status`);
+  // The Graph: one standardized query over every Messari DEX subgraph, sold by
+  // the dex-pools lanes. Needs a Graph API key; without one those lanes skip.
+  if (!OFFLINE && process.env.GRAPH_API_KEY) {
+    const graphPort = process.env.MX_GRAPH_PORT ?? "4130";
+    child("graph", "src/graph/server.ts", [], { MX_GRAPH_PORT: graphPort });
+    await waitFor(`http://127.0.0.1:${graphPort}/health`);
+    process.env.MX_GRAPH_URL = `http://127.0.0.1:${graphPort}`;
+  }
   console.log(`✅ hub is up on :${HUB_PORT}, starting ${cfg.lanes.length} lane(s) from ${lanesFile}`);
 
   // Tabs need a spender account to pull the allowance with.

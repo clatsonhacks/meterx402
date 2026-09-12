@@ -5,7 +5,7 @@
 
 Any API, A2A agent or MCP tool becomes something an agent can **find, price, budget for, pay
 and rate** without knowing anything about the chain underneath. Payment is usage-based — a rate
-per token, per row, per KB — settled on Hedera through x402, with a service registry, a
+per token, per row, per KB — settled on Hedera through x402 (or in USDC on Base and Solana), with a service registry, a
 deterministic reputation score, Metered Tabs for repeated calls, and adapters for REST, GraphQL,
 A2A and MCP. The architecture is in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -248,6 +248,107 @@ Scored by ratio to the best in the round — price 0.45, reputation 0.4, latency
 the price is half the score. Live, a proven seller beat an unrated rival at **half** the price,
 and a ceiling nobody could meet declined the whole field with its reasons.
 
+## Beyond Hedera: Base, Solana, The Graph and Uniswap
+
+### Pay in USDC on Base and Solana
+
+The gateway, the SDK and the receipts are the same; a lane picks its chain.
+
+```bash
+npx tsx scripts/new-chain-wallets.ts                  # buyer + payout wallets for Base Sepolia and Solana devnet (.env, keys never printed)
+mx402 <api> --chain base-sepolia  --wallet 0x…        # USDC, EIP-3009 transferWithAuthorization, facilitator pays gas
+mx402 <api> --chain solana-devnet --wallet <address>  # USDC, SPL transfer, facilitator is the fee payer
+```
+```ts
+new MeterX402({ wallet: { privateKey: process.env.BUYER_EVM_PRIVATE_KEY, network: "eip155:84532" }, budget: "0.05 USDC" });
+new MeterX402({ wallet: { privateKey: process.env.BUYER_SOLANA_SECRET_KEY, network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" } });
+```
+
+- Presets: [src/chains.ts#L48](src/chains.ts#L48) (Base Sepolia), [#L72](src/chains.ts#L72) (Solana devnet), USDC per network [#L100](src/chains.ts#L100).
+- The buyer signs with viem or `@solana/kit`, loaded only when needed: [src/sdk/buyer.ts#L334](src/sdk/buyer.ts#L334).
+- The payment is checked on the chain itself, not taken from the facilitator:
+  - EVM: USDC `Transfer` logs in the receipt, [src/settlement/verify-chains.ts#L52](src/settlement/verify-chains.ts#L52).
+  - Solana: the seller's token balance change, [#L71](src/settlement/verify-chains.ts#L71).
+- `npm run demo` runs `dex-pools-base` (USDC on Base Sepolia) and `weather-solana` (USDC on Solana devnet) next to the Hedera lanes.
+
+Status: both gateways issue correct 402s. The EVM and Solana buyers sign, and the x402.org facilitator verifies what they sign. Settlement needs testnet USDC in the generated buyer wallets ([faucet.circle.com](https://faucet.circle.com)). Then run `npx tsx scripts/live-chains.ts`.
+
+### The Graph: one standardized query across 15 DEX subgraphs
+
+The `dex-pools` lane asks every [Messari standardized](https://thegraph.com/docs/en/subgraphs/existing-subgraphs/standard-subgraphs/) DEX AMM subgraph the same question at once:
+- Uniswap v3 on Ethereum, Arbitrum, Base, Optimism, Polygon, BSC and Celo
+- SushiSwap on three chains
+- PancakeSwap, Curve, Balancer, Camelot and Velodrome
+
+It merges the answers into one table: TVL, 24h volume, fee and fee APR. Callers pay per pool returned.
+
+| | |
+|---|---|
+| the sources | [src/graph/standard.ts#L21](src/graph/standard.ts#L21), one line per subgraph |
+| the one query | [#L40](src/graph/standard.ts#L40): only standard-schema fields |
+| one shape for every protocol | [#L137](src/graph/standard.ts#L137) |
+| parallel fan-out, per-source report, circuit breaker | [#L195](src/graph/standard.ts#L195), [#L237](src/graph/standard.ts#L237) |
+| the HTTP upstream the gateway meters | [src/graph/server.ts](src/graph/server.ts) |
+| the lanes | [lanes.json#L172](lanes.json#L172) (HBAR), [#L190](lanes.json#L190) (USDC on Base) |
+
+What the standard bought:
+- **No per-protocol adapters.** Uniswap, Curve and Balancer describe fees and liquidity differently, and here one `normalize` covers all of them.
+- **A chain is a line.** Adding a chain or a protocol means adding a subgraph id.
+- **Comparable yields.** Fee APR is computed the same way everywhere, so yields from different protocols can be compared.
+
+Live, `GET /pools?tokens=USDC,ETH&min_tvl=50000`:
+
+| pool | TVL | 24h volume | fee APR |
+|---|---|---|---|
+| uniswap-v3 / ethereum USDC-WETH 0.05% | $109.7M | $155.2M | 25.8% |
+| uniswap-v3 / ethereum USDC-WETH 0.3% | $32.9M | $15.7M | 52.1% |
+| uniswap-v3 / arbitrum WETH-USDC 0.05% | $1.06M | $807k | 13.8% |
+| uniswap-v3 / polygon USDC-WETH 0.05% | $701k | $416k | 10.8% |
+| curve-finance / ethereum WBTC-USDC-WETH | $4.79M | $274k | 0.8% |
+
+Indexer health varies. In our runs 8 to 9 of the 15 subgraphs answered. Base, Optimism and BSC Uniswap v3 timed out or had failing indexers. Every response carries a `sources` report, so a gap is visible rather than silent.
+
+### The DEX analyst: an agent that pays for its own research
+
+```bash
+mx402 analyst "Where can USDC earn the most fees against ETH? Also price a \$2000 USDC to ETH swap."
+```
+
+Four steps, each an x402 payment through the SDK within the buyer's budget:
+1. The LLM plans the query, paid per token.
+2. The Graph returns pools, paid per pool.
+3. The Uniswap Trading API prices the trade, paid per quote.
+4. The LLM writes the answer, paid per token.
+
+The numbers the answer rests on are computed in code ([src/graph/analyst.ts#L182](src/graph/analyst.ts#L182)): best pool above a TVL floor, fee APR, implied price, thin-liquidity warnings. The LLM only chooses what to look up and writes prose around those facts, and a rules planner stands in when no LLM service is live ([#L106](src/graph/analyst.ts#L106)). A live run:
+
+```
+Paid:
+  plan    llm            400 tokens → 0.004 HBAR  tx 0.0.7162784@1789247964.071079545
+  pools   dex-pools      12 rows    → 0.006 HBAR  tx 0.0.7162784@1789247975.321851525
+  quote   uniswap-quote  1 request  → 0.002 HBAR  tx 0.0.7162784@1789247977.589209659
+  answer  llm            500 tokens → 0.005 HBAR  tx 0.0.7162784@1789247982.127388281
+  total: 0.017 HBAR
+```
+
+Also available as:
+- MCP tools `find_dex_pools` and `ask_dex_analyst` ([src/mcp.ts#L89](src/mcp.ts#L89)), so Claude or any MCP client can buy Graph data by the row.
+- A panel in the Playground, backed by `POST /playground/analyst` ([src/hub.ts#L483](src/hub.ts#L483)).
+- A demo link: `/?ask=…#user/playground`.
+
+### Uniswap
+
+- **`uniswap-quote` lane** ([lanes.json#L210](lanes.json#L210)). It sells the Uniswap Trading API `POST /quote` per quote. The API key stays in the gateway, so an agent without a Uniswap key can still buy quotes.
+- **The analyst's trade step.**
+  - [src/graph/analyst.ts#L229](src/graph/analyst.ts#L229) builds the `/quote` body from the deepest pool on a chain the API serves, using token addresses and decimals from The Graph.
+  - [#L352](src/graph/analyst.ts#L352) pays for it.
+  - [#L258](src/graph/analyst.ts#L258) reads both CLASSIC routes and UniswapX orders.
+- **Live quotes:**
+  - Base: 1,000 USDC → 0.39666 WETH via `[v3] 0.01%`, price impact 0.04%, gas $0.0027.
+  - Ethereum: 2,000 USDC → 0.792553 WETH as a gasless UniswapX `DUTCH_V2` order; the classic route would cost about $0.075 in gas.
+- **`uniswap-data` lane** ([lanes.json#L114](lanes.json#L114)): the official Uniswap v3 subgraph, per pool.
+- **Developer feedback:** [FEEDBACK.md](./FEEDBACK.md).
+
 ## Registry and reputation
 
 `GET /registry/services?capability=weather_forecast&minReputation=90&maxPrice=0.05` returns
@@ -316,7 +417,8 @@ cannot quote one response and deliver another.
 
 ```
 src/protocol/      ServiceDescriptor, PaymentQuote, PaymentAuthorization, SettlementReceipt, ReputationRecord, Dispute
-src/settlement/    the SettlementAdapter interface, X402ExactAdapter, route selection
+src/settlement/    the SettlementAdapter interface, X402ExactAdapter, route selection, EVM + Solana verification
+src/graph/         The Graph: standardized DEX fan-out (standard.ts), its HTTP upstream (server.ts), the DEX analyst agent (analyst.ts)
 src/registry/      the service registry and the reputation engine (served by the hub)
 src/sdk/           buyer (MeterX402), seller (wrap), agent (MeterX402Agent)
 src/adapters/a2a.ts   every service as an A2A agent, x402 payment in task metadata
@@ -342,9 +444,11 @@ packages/mx402/    the npm package: bundled SDK (import "mx402") + CLI (npx mx40
 ## Testing
 
 ```bash
-npm test         # 117 tests: engine, protocol, registry, reputation + end-to-end incl. the full lifecycle
+npm test         # unit + end-to-end: engine, protocol, registry, reputation, The Graph fan-out, the analyst, the full lifecycle
 npm run test:live   # real Hedera testnet, mirror-node verified
-npx tsx scripts/live-agent.ts   # the whole lifecycle live, as an agent (needs `npm run demo` running)
+npx tsx scripts/live-agent.ts    # the whole lifecycle live, as an agent (needs `npm run demo` running)
+npx tsx scripts/live-chains.ts   # pay from Base Sepolia and Solana devnet wallets (needs testnet USDC)
+mx402 analyst "…"                # The Graph + Uniswap + LLM, every step paid
 ```
 
 `npm run build:cli` bundles the CLI into `packages/mx402/dist/mx402.mjs` (one file, no runtime
@@ -361,7 +465,7 @@ See [APPROACH.md](./APPROACH.md) for the design, the trade-offs and the test pla
 ## Carried over from GlassBox402
 
 One-command wrapping, header/Bearer/query-param upstream auth (your key never leaves the server),
-REST + GraphQL, chain presets (`--chain hedera|base|base-sepolia|solana`), the hub + live
+REST + GraphQL, chain presets (`--chain hedera|base|base-sepolia|solana|solana-devnet`), the hub + live
 dashboard + event tape, HCS receipts, account lazy-create from a MetaMask address, World ID human
 vs agent pricing, the MCP server, and `lanes.json` + supervisor.
 

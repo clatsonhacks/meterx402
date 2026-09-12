@@ -98,6 +98,12 @@ export class X402ExactAdapter implements SettlementAdapter {
   }
 
   async verify(transaction: string, payTo: string): Promise<Verification> {
+    if (this.opts.network.startsWith("eip155:") || this.opts.network.startsWith("solana:")) {
+      const { verifyEvmTransfer, verifySolanaTransfer } = await import("./verify-chains.ts");
+      return this.opts.network.startsWith("eip155:")
+        ? verifyEvmTransfer(this.opts.network, transaction, payTo)
+        : verifySolanaTransfer(this.opts.network, transaction, payTo);
+    }
     if (!this.opts.network.startsWith("hedera:")) return { verified: false, detail: `no independent verifier for ${this.opts.network} yet` };
     const { mirrorTransfer } = await import("../hedera.ts");
     const asset = this.preset.asset;

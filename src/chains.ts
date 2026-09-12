@@ -25,7 +25,7 @@ export interface ChainPreset {
   asset: string;      // "0.0.0" = native HBAR, else an HTS token id / ERC-20
   /** Present when the ledger itself takes a cut of every transfer. */
   fee?: AssetFee;
-  explorer: "hashscan-testnet" | "hashscan-mainnet" | "basescan" | "basescan-sepolia" | "solscan";
+  explorer: "hashscan-testnet" | "hashscan-mainnet" | "basescan" | "basescan-sepolia" | "solscan" | "solscan-devnet";
   load(): Promise<new () => SchemeNetworkServer>;
   price(atomic: bigint): Price;
 }
@@ -69,6 +69,18 @@ export const CHAINS: Record<string, ChainPreset> = {
     load: async () => (await import(/* optional */ "@x402/evm/exact/server" as string)).ExactEvmScheme,
     price: usdc,
   },
+  "solana-devnet": {
+    name: "solana-devnet",
+    network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    facilitator: "https://x402.org/facilitator",
+    register: "solana:*",
+    decimals: 6,
+    currency: "USDC",
+    asset: "USDC",
+    explorer: "solscan-devnet",
+    load: async () => (await import(/* optional */ "@x402/svm/exact/server" as string)).ExactSvmScheme,
+    price: usdc,
+  },
   solana: {
     name: "solana",
     network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
@@ -82,6 +94,18 @@ export const CHAINS: Record<string, ChainPreset> = {
     price: usdc,
   },
 };
+
+/** The USDC each non-Hedera network settles in: what a buyer agrees to sign
+ *  a transfer of without an explicit opt-in. */
+export const USDC: Record<string, string> = {
+  "eip155:84532": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "eip155:8453": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": "EPjFWdd5AufqyNpD6XpN3fhbZtjHsMXNpVCpWdpHXqYf",
+};
+
+/** Settlement decimals by network family: tinybar on Hedera, USDC elsewhere. */
+export const decimalsFor = (network: string) => (network.startsWith("hedera:") ? 8 : 6);
 
 /** Settle in an HTS token instead of HBAR.
  *
@@ -137,5 +161,6 @@ export function explorerTx(preset: Pick<ChainPreset, "explorer">, tx: string): s
     case "basescan": return `https://basescan.org/tx/${tx}`;
     case "basescan-sepolia": return `https://sepolia.basescan.org/tx/${tx}`;
     case "solscan": return `https://solscan.io/tx/${tx}`;
+    case "solscan-devnet": return `https://solscan.io/tx/${tx}?cluster=devnet`;
   }
 }

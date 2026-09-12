@@ -21,6 +21,7 @@ import { decodePaymentRequiredHeader, decodePaymentResponseHeader, encodePayment
 import type { PaymentRequired } from "@x402/core/types";
 import { createClientHederaSigner, ExactHederaScheme, type PrivateKey } from "@x402/hedera";
 import { parseHederaKey } from "../hedera.ts";
+import { decimalsFor, USDC } from "../chains.ts";
 import { makeMeter } from "../meters.ts";
 import { fromAtomic, toAtomic } from "../pricing.ts";
 import { selectRoute, type Route } from "../settlement/adapter.ts";
@@ -31,9 +32,13 @@ import {
 import type { Listing, SearchFilter } from "../registry/registry.ts";
 
 export interface WalletConfig {
-  accountId: string;
+  /** Hedera 0.0.x (required on Hedera). On EVM and Solana it is derived from the key. */
+  accountId?: string;
+  /** Hedera: DER or hex key. EVM: 0x-prefixed hex. Solana: base58 64-byte secret key. */
   privateKey: string | PrivateKey;
-  network?: "hedera:testnet" | "hedera:mainnet";
+  /** CAIP-2: hedera:testnet (default), eip155:84532 (Base Sepolia),
+   *  solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 (Solana devnet), … */
+  network?: string;
 }
 
 export interface MeterX402Options {
@@ -117,10 +122,15 @@ export function parseAmount(v: string | number | undefined): { amount: string; c
 }
 
 export class MeterX402 {
-  readonly accountId: string;
-  readonly network: "hedera:testnet" | "hedera:mainnet";
+  /** Hedera 0.0.x, EVM 0x…, or Solana address (EVM/Solana: known after the first signature, or pass it). */
+  accountId: string;
+  readonly network: string;
+  /** Atomic decimals of what this wallet pays in: 8 (tinybar) on Hedera, 6 (USDC) on EVM and Solana. */
+  readonly decimals: number;
+  readonly family: "hedera" | "evm" | "solana";
   private key: PrivateKey;
-  private signer;
+  private rawKey = "";
+  private signer: any;
   private budget: { atomic: bigint; currency?: string } | null;
   private assets: string[];
   private maxPerCall: { atomic: bigint; currency?: string } | null;
@@ -131,20 +141,30 @@ export class MeterX402 {
   private autoDispute: boolean;
 
   constructor(private opts: MeterX402Options) {
-    this.accountId = opts.wallet.accountId;
     this.network = opts.wallet.network ?? "hedera:testnet";
-    this.key = typeof opts.wallet.privateKey === "string" ? parseHederaKey(opts.wallet.privateKey) : opts.wallet.privateKey;
-    this.signer = createClientHederaSigner(this.accountId, this.key, { network: this.network });
+    this.family = this.network.startsWith("eip155:") ? "evm" : this.network.startsWith("solana:") ? "solana" : "hedera";
+    this.decimals = decimalsFor(this.network);
+    this.accountId = opts.wallet.accountId ?? "";
+    if (this.family === "hedera") {
+      if (!this.accountId) throw new Error("a Hedera wallet needs accountId (0.0.x)");
+      this.key = typeof opts.wallet.privateKey === "string" ? parseHederaKey(opts.wallet.privateKey) : opts.wallet.privateKey;
+      this.signer = createClientHederaSigner(this.accountId, this.key, { network: this.network as "hedera:testnet" });
+    } else {
+      // EVM and Solana signers load their libraries on first use (see x402()),
+      // so a Hedera-only buyer never pays for viem or @solana/kit
+      this.key = null as unknown as PrivateKey;
+      this.rawKey = String(opts.wallet.privateKey);
+    }
     const b = parseAmount(opts.budget), m = parseAmount(opts.maxPerCall);
-    this.budget = b ? { atomic: toAtomic(b.amount), currency: b.currency } : null;
-    this.maxPerCall = m ? { atomic: toAtomic(m.amount), currency: m.currency } : null;
+    this.budget = b ? { atomic: toAtomic(b.amount, this.decimals), currency: b.currency } : null;
+    this.maxPerCall = m ? { atomic: toAtomic(m.amount, this.decimals), currency: m.currency } : null;
     this.assets = opts.assets ?? [];
     this.registryUrl = opts.registry?.replace(/\/+$/, "");
     this.autoDispute = opts.autoDispute ?? true;
   }
 
-  get spent() { return fromAtomic(this._spent); }
-  get remaining() { return this.budget ? fromAtomic(this.budget.atomic - this._spent - this.reserved) : null; }
+  get spent() { return fromAtomic(this._spent, this.decimals); }
+  get remaining() { return this.budget ? fromAtomic(this.budget.atomic - this._spent - this.reserved, this.decimals) : null; }
   get wallet() { return { accountId: this.accountId, privateKey: this.key, network: this.network }; }
   /** What this wallet can settle on, for route selection. */
   get supports() { return [{ network: this.network, currencies: this.budget?.currency ? [this.budget.currency] : undefined }]; }
@@ -226,10 +246,10 @@ export class MeterX402 {
   private async pay(url: URL, init: RequestInit, body: string | undefined, quote: PaymentQuote, paymentRequired: PaymentRequired, req: CallRequest): Promise<CallResult> {
     const amount = BigInt(quote.amount_atomic);
     const maxPrice = parseAmount(req.maxPrice);
-    if (maxPrice && amount > toAtomic(maxPrice.amount)) throw new BudgetError(`quote ${quote.amount} ${quote.currency} is above this call's limit of ${maxPrice.amount}`, quote);
-    if (this.maxPerCall && amount > this.maxPerCall.atomic) throw new BudgetError(`quote ${quote.amount} ${quote.currency} is above maxPerCall ${fromAtomic(this.maxPerCall.atomic)}`, quote);
+    if (maxPrice && amount > toAtomic(maxPrice.amount, this.decimals)) throw new BudgetError(`quote ${quote.amount} ${quote.currency} is above this call's limit of ${maxPrice.amount}`, quote);
+    if (this.maxPerCall && amount > this.maxPerCall.atomic) throw new BudgetError(`quote ${quote.amount} ${quote.currency} is above maxPerCall ${fromAtomic(this.maxPerCall.atomic, this.decimals)}`, quote);
     if (this.budget && this._spent + this.reserved + amount > this.budget.atomic) {
-      throw new BudgetError(`budget: ${this.spent} spent + ${quote.amount} would exceed ${fromAtomic(this.budget.atomic)} ${this.budget.currency ?? quote.currency}`, quote);
+      throw new BudgetError(`budget: ${this.spent} spent + ${quote.amount} would exceed ${fromAtomic(this.budget.atomic, this.decimals)} ${this.budget.currency ?? quote.currency}`, quote);
     }
     if (req.maxUnits && quote.units > req.maxUnits) throw new BudgetError(`quote bills ${quote.units} ${quote.unit}, above the cap of ${req.maxUnits}`, quote);
     if (Date.now() > quote.expires_at) throw new BudgetError("quote expired", quote);
@@ -238,17 +258,19 @@ export class MeterX402 {
       throw new BudgetError(`this wallet will not pay in ${quote.currency} (${asset}): pass it in \`assets\` to opt in`, quote);
     }
 
+    // build the signer first: on EVM and Solana it is what tells us our address
+    const client = await this.x402();
     const authorization: PaymentAuthorization = {
       mx402: PROTOCOL_VERSION, kind: "exact", buyer: this.accountId, service_id: quote.service_id, network: quote.network as any,
-      ...(this.maxPerCall ? { max_per_call: fromAtomic(this.maxPerCall.atomic) } : {}),
+      ...(this.maxPerCall ? { max_per_call: fromAtomic(this.maxPerCall.atomic, this.decimals) } : {}),
       ...(req.maxUnits ? { max_units: req.maxUnits } : {}),
-      ...(this.budget ? { budget: fromAtomic(this.budget.atomic) } : {}),
+      ...(this.budget ? { budget: fromAtomic(this.budget.atomic, this.decimals) } : {}),
       expires_at: quote.expires_at, quote_id: quote.quote_id, authorized_at: Date.now(),
     };
 
     this.reserved += amount;
     try {
-      const payload = await this.x402().createPaymentPayload(paymentRequired);
+      const payload = await client.createPaymentPayload(paymentRequired);
       const headers = new Headers(init.headers);
       headers.set("PAYMENT-SIGNATURE", encodePaymentSignatureHeader(payload));
       const res = await fetch(url, { ...init, headers });
@@ -267,6 +289,7 @@ export class MeterX402 {
    *  key, so any period that has not run can still be cancelled. */
   async subscribe(target: string | ServiceDescriptor | Listing, opts: { periods?: number; startAt?: number } = {}): Promise<SubscriptionHandle> {
     const service = await this.resolve(target);
+    if (this.family !== "hedera") throw new BudgetError("subscriptions are Hedera scheduled transfers: subscribe with a Hedera wallet");
     const terms = service.payment.subscription;
     if (!terms) throw new BudgetError(`${service.service_id} does not sell subscriptions`);
     const periods = Math.min(opts.periods ?? 1, terms.max_periods);
@@ -307,20 +330,47 @@ export class MeterX402 {
     };
   }
 
-  /** The x402 client, signing only this buyer's allowed assets and ceiling. */
-  x402() {
-    const client = new x402Client().register(this.network, new ExactHederaScheme(this.signer) as any);
+  /** The x402 client for this wallet's chain, signing only its allowed assets and ceiling. */
+  async x402() {
+    const network = this.network as `${string}:${string}`;
+    const client = new x402Client();
+    if (this.family === "hedera") {
+      client.register(network, new ExactHederaScheme(this.signer) as any);
+    } else if (this.family === "evm") {
+      // EIP-3009 transferWithAuthorization: the buyer signs, the facilitator pays gas
+      this.signer ??= await (async () => {
+        const [{ privateKeyToAccount }] = await Promise.all([import("viem/accounts")]);
+        return privateKeyToAccount(this.rawKey as `0x${string}`);
+      })();
+      this.accountId ||= this.signer.address;
+      const { ExactEvmScheme } = await import("@x402/evm/exact/client");
+      client.register(network, new ExactEvmScheme(this.signer) as any);
+    } else {
+      // an SPL transfer the buyer signs and the facilitator completes as fee payer
+      this.signer ??= await (async () => {
+        const { createKeyPairSignerFromBytes, getBase58Encoder } = await import("@solana/kit");
+        return createKeyPairSignerFromBytes(getBase58Encoder().encode(this.rawKey) as Uint8Array);
+      })();
+      this.accountId ||= this.signer.address;
+      const { ExactSvmScheme } = await import("@x402/svm/exact/client");
+      client.register(network, new ExactSvmScheme(this.signer, process.env.SOLANA_RPC_URL ? { rpcUrl: process.env.SOLANA_RPC_URL } : undefined) as any);
+    }
     const cap = this.maxPerCall ? { maxAmountPerPayment: this.maxPerCall.atomic.toString() } : {};
+    const base = this.family === "hedera" ? "0.0.0" : USDC[this.network];
     client.setSpendControls({
       maxAmountPerPayment: false,
-      allowedAssets: ["0.0.0", ...this.assets].map((asset) => ({ network: this.network, asset, ...cap })),
+      allowedAssets: [base, ...this.assets].filter(Boolean).map((asset) => ({ network, asset, ...cap })),
     });
     return client;
   }
 
-  /** Would this wallet sign a transfer of that asset at all? */
+  /** Would this wallet sign a transfer of that asset at all? Native HBAR on
+   *  Hedera and the network's USDC elsewhere; anything else needs an opt-in. */
   allowsAsset(asset: string | undefined) {
-    return !asset || asset === "0.0.0" || this.assets.includes(asset);
+    if (!asset) return true;
+    const base = this.family === "hedera" ? "0.0.0" : USDC[this.network];
+    const same = (a: string, b?: string) => !!b && a.toLowerCase() === b.toLowerCase();
+    return same(asset, base) || this.assets.some((a) => same(asset, a));
   }
 
   // ── receipt + verification ──────────────────────────────────────────────

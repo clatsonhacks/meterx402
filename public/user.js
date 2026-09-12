@@ -114,9 +114,9 @@ function renderExplore() {
 }
 
 function cardHtml(l) {
-  const d = l.descriptor, p = d.pricing, c = catOf(d);
+  const d = l.descriptor, p = d.pricing, c = catOf(d), cur = curOf(l);
   const typical = l.price.typical_call, worst = l.price.worst_case_call;
-  const cents = typical != null ? centsPhrase(typical) : null;
+  const cents = typical != null ? centsIn(typical, cur) : null;
   return `<article class="card svc" tabindex="0" data-id="${esc(d.service_id)}" aria-label="${esc(titleOf(d))}">
     <div class="top">
       ${avatar(d)}
@@ -128,8 +128,8 @@ function cardHtml(l) {
     </div>
     <p class="desc">${esc(d.description ?? "")}</p>
     <div class="pricebox">
-      <div class="p-main">${fmt(p.rate)} <small>HBAR ${esc(perPhrase(p))}</small></div>
-      <div class="p-sub">${typical != null ? `Typical use ${hbar(typical)}${cents ? ` · ${cents}` : ""}` : worst != null ? `Never more than ${hbar(worst)} a use` : "priced by usage"}</div>
+      <div class="p-main">${fmt(p.rate)} <small>${esc(cur)} ${esc(perPhrase(p))}</small></div>
+      <div class="p-sub">${typical != null ? `Typical use ${amt(typical, cur)}${cents ? ` · ${cents}` : ""}` : worst != null ? `Never more than ${amt(worst, cur)} a use` : "priced by usage"}</div>
     </div>
     <div class="foot">
       <div class="feats">${d.dataset ? `<span class="feat">${icon("package")} ${Number(d.dataset.rows).toLocaleString()} rows × ${d.dataset.columns.length} cols</span>` : ""}${d.payment.streaming ? `<span class="feat">${icon("zap")} Streams live</span>` : ""}${l.reputation.stats.paid_calls ? `<span class="feat">${l.reputation.stats.paid_calls} paid use${l.reputation.stats.paid_calls === 1 ? "" : "s"}</span>` : ""}</div>
@@ -176,7 +176,7 @@ function renderSheet(fresh) {
 }
 
 function aboutHtml(l) {
-  const d = l.descriptor, r = l.reputation, st = r.stats, p = d.pricing;
+  const d = l.descriptor, r = l.reputation, st = r.stats, p = d.pricing, cur = curOf(l);
   const cap = p.max_units;
   const pcStart = Math.min(cap ?? 100, Math.max(1, Math.round((cap ?? 100) / 4)));
   const reasons = [
@@ -187,16 +187,16 @@ function aboutHtml(l) {
     [st.uptime_ratio != null, `Online in ${Math.round((st.uptime_ratio ?? 0) * 100)}% of checks`],
   ].filter(([ok]) => ok).map(([, t]) => `<li>✓ ${esc(t)}</li>`).join("");
   const recent = (M.receipts[d.service_id] ?? []).slice(0, 5).map((x) =>
-    `<li><span>${ago(x.settled_at)}</span><span>${esc(units(p, x.metered_units))}</span><b>${hbar(x.amount)}</b></li>`).join("");
+    `<li><span>${ago(x.settled_at)}</span><span>${esc(units(p, x.metered_units))}</span><b>${amt(x.amount, x.currency ?? cur)}</b></li>`).join("");
   return `<p class="lead">${esc(d.description ?? "")}</p>
 
     <h4>What it costs</h4>
     <div class="pricecalc card">
-      <div class="pc-top"><b>${fmt(p.rate)} HBAR</b> <span>${esc(perPhrase(p))}</span></div>
+      <div class="pc-top"><b>${fmt(p.rate)} ${esc(cur)}</b> <span>${esc(perPhrase(p))}</span></div>
       <label class="pc-row">How much would you use?
         <input type="range" id="pc-range" min="1" max="${cap ?? 100}" value="${pcStart}"></label>
-      <div class="pc-out" id="pc-out">${esc(units(p, pcStart))} → <b>${money(priceFor(p, pcStart))}</b></div>
-      ${cap ? `<div class="pc-flat">A flat-priced API has to charge for the worst case: <b>${hbar(priceFor(p, cap))}</b> every single call, however little you use.</div>` : ""}
+      <div class="pc-out" id="pc-out">${esc(units(p, pcStart))} → <b>${moneyIn(priceFor(p, pcStart), cur)}</b></div>
+      ${cap ? `<div class="pc-flat">A flat-priced API has to charge for the worst case: <b>${amt(priceFor(p, cap), cur)}</b> every single call, however little you use.</div>` : ""}
     </div>
 
     <h4>Can you trust it?</h4>
@@ -373,13 +373,15 @@ function refreshCostLine() {
       <span class="cl-lim">no payment for this call</span>`;
     return;
   }
-  const overs = est != null && est > Number(LIM.perRequest);
+  // spending limits are set in HBAR; a service paid in USDC is confirmed by hand instead
+  const cur = curOf(l), inHbar = cur === "HBAR";
+  const overs = inHbar && est != null && est > Number(LIM.perRequest);
   $("costline").className = `costline${overs ? " over" : ""}`;
   $("costline").innerHTML = `
     <span class="cl-est" id="cl-est">${est == null
       ? `You'll see the exact price before paying.`
-      : `${exact ? "This request" : "Usually"}: <b>${money(est)}</b>${exact && u != null ? ` for ${esc(units(p, Math.min(u, p.max_units ?? u)))}` : ""}`}</span>
-    <span class="cl-lim">${overs ? "⚠ above" : "Your limit:"} ${hbar(LIM.perRequest)} per request <button class="linky" id="cl-change">Change</button></span>`;
+      : `${exact ? "This request" : "Usually"}: <b>${moneyIn(est, cur)}</b>${exact && u != null ? ` for ${esc(units(p, Math.min(u, p.max_units ?? u)))}` : ""}`}</span>
+    <span class="cl-lim">${inHbar ? `${overs ? "⚠ above" : "Your limit:"} ${hbar(LIM.perRequest)} per request` : `Paid in ${esc(cur)} on ${esc(chainName(l.descriptor.payment.settlement?.[0]?.network))}, you confirm each payment`} <button class="linky" id="cl-change">Change</button></span>`;
   $("cl-change").onclick = (e) => { e.preventDefault(); openWalletPop(); };
 
   // A dataset can say how many rows a filter matches before anyone pays for
@@ -392,7 +394,7 @@ function refreshCostLine() {
       if (TRY?.countToken !== token || !$("cl-est") || c?.matched == null) return;
       $("cl-est").innerHTML = `<b>${Number(c.matched).toLocaleString()}</b> rows match` +
         (c.of != null && c.of !== c.matched ? ` of ${Number(c.of).toLocaleString()}` : "") +
-        (est == null ? "" : ` · this one costs <b>${money(est)}</b>${u != null ? ` for ${esc(units(p, Math.min(u, p.max_units ?? u)))}` : ""}`);
+        (est == null ? "" : ` · this one costs <b>${moneyIn(est, cur)}</b>${u != null ? ` for ${esc(units(p, Math.min(u, p.max_units ?? u)))}` : ""}`);
     }).catch(() => {});
   }
 }
@@ -424,15 +426,17 @@ async function runTry() {
   if (qr.free) { out.innerHTML = `<div class="notice ok"><b>Free</b><div>Nothing billable was used, so there was nothing to pay.</div></div>${resultHtml(l, qr.result?.data, f)}`; return; }
 
   const q = qr.quote, amount = Number(q.amount);
-  const overReq = amount > Number(LIM.perRequest);
-  const overSes = sessionSpent() + amount > Number(LIM.session);
+  // the limits are HBAR amounts: they say nothing about a USDC price
+  const inHbar = q.currency === "HBAR";
+  const overReq = inHbar && amount > Number(LIM.perRequest);
+  const overSes = inHbar && sessionSpent() + amount > Number(LIM.session);
   steps.push({ t: "Got an exact price", d: `${esc(units(d.pricing, q.units))} → ${esc(q.amount)} ${esc(q.currency)}, with the answer held until paid` });
 
-  if (LIM.autopay && !overReq && !overSes) {
+  if (LIM.autopay && inHbar && !overReq && !overSes) {
     steps.push({ t: "Checked your limits", d: `under your ${hbar(LIM.perRequest)} limit, so it was paid automatically` });
     return payQuote(l, q, f, out, steps, LIM.perRequest, true);
   }
-  steps.push({ t: "Checked your limits", d: overReq ? `above your ${hbar(LIM.perRequest)} limit: asking you first` : overSes ? `would pass your ${hbar(LIM.session)} session limit: asking you first` : `within your ${hbar(LIM.perRequest)} limit` });
+  steps.push({ t: "Checked your limits", d: !inHbar ? `priced in ${esc(q.currency)} on ${esc(chainName(q.network))}: your HBAR limits don't apply, so you confirm it` : overReq ? `above your ${hbar(LIM.perRequest)} limit: asking you first` : overSes ? `would pass your ${hbar(LIM.session)} session limit: asking you first` : `within your ${hbar(LIM.perRequest)} limit` });
   renderPaySheet(l, q, f, out, steps, { overReq, overSes });
 }
 
@@ -465,7 +469,7 @@ function renderPaySheet(l, q, f, out, steps, warn) {
       <div class="ps-head">Ready to pay</div>
       <div class="ps-row"><span>${esc(titleOf(d))}</span><span>${esc(units(d.pricing, q.units))}</span></div>
       <div class="ps-total"><span>Total</span><span class="amt">${fmt(q.amount)} <small>${esc(q.currency)}</small></span></div>
-      ${usdOf(amount) != null ? `<div class="ps-usd">≈ ${usdText(usdOf(amount))}</div>` : ""}
+      ${!isUsd(q.currency) && usdOf(amount) != null ? `<div class="ps-usd">≈ ${usdText(usdOf(amount))}</div>` : ""}
       ${warn.overReq ? `<div class="notice warn">This is above your ${hbar(LIM.perRequest)} per-request limit.</div>` : ""}
       ${warn.overSes ? `<div class="notice warn">This would take you past your ${hbar(LIM.session)} limit for this session.</div>` : ""}
       <div class="ps-actions"><button class="primary big" id="ps-pay">Pay ${fmt(q.amount)} ${esc(q.currency)}</button><button class="ghost" id="ps-no">Cancel</button></div>
@@ -510,7 +514,7 @@ function renderPaySheet(l, q, f, out, steps, warn) {
 
 async function payQuote(l, q, f, out, steps, maxPrice, auto) {
   const d = l.descriptor;
-  out.innerHTML = workingHtml("Paying on Hedera…");
+  out.innerHTML = workingHtml(`Paying on ${chainName(q.network)}…`);
   const pr = await fetch("/playground/pay", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ quote_id: q.quote_id, maxPrice: String(maxPrice) }),
@@ -523,11 +527,11 @@ async function payQuote(l, q, f, out, steps, maxPrice, auto) {
     return;
   }
   const rc = pr.result.receipt, v = pr.result.verification;
-  steps.push({ t: "Paid", d: `${esc(rc.amount)} ${esc(rc.currency)} settled on Hedera${rc.transaction_id ? ` · ${esc(rc.transaction_id)}` : ""}` });
+  steps.push({ t: "Paid", d: `${esc(rc.amount)} ${esc(rc.currency)} settled on ${esc(chainName(rc.network))}${rc.transaction_id ? ` · ${esc(rc.transaction_id)}` : ""}` });
   if (v) steps.push({ t: "Checked what arrived", d: `body hash ${v.bodyHash ? "matches the price you agreed" : "does NOT match"} · re-counted ${v.remetered ?? "n/a"} ${esc(rc.unit)} (${esc(v.method)})${pr.result.dispute?.filed ? " · dispute filed automatically" : ""}`, bad: v.bodyHash === false });
 
   out.innerHTML = receiptHtml(l, rc, v, auto) + resultHtml(l, pr.result.data, f) + whatHappened(steps);
-  toast(`Paid ${hbar(rc.amount)} · ${esc(titleOf(d))}`);
+  toast(`Paid ${amt(rc.amount, rc.currency)} · ${esc(titleOf(d))}`);
   loadMine(); loadMarket();
 }
 
@@ -548,12 +552,12 @@ function receiptHtml(l, rc, v, auto) {
       <div class="sub">Assessed by consensus from the token's own fee schedule, not by MeterX402.</div>
     </div>` : "";
   return `<div class="receipt-card">
-    <div class="rc-head"><span class="rc-tick">✓</span><b>Paid ${fmt(rc.amount)} ${esc(rc.currency)}</b>${usdOf(amount) != null ? `<span class="usd">≈ ${usdText(usdOf(amount))}</span>` : ""}${auto ? `<span class="badge">auto-paid</span>` : ""}</div>
+    <div class="rc-head"><span class="rc-tick">✓</span><b>Paid ${fmt(rc.amount)} ${esc(rc.currency)}</b>${!isUsd(rc.currency) && usdOf(amount) != null ? `<span class="usd">≈ ${usdText(usdOf(amount))}</span>` : ""}${auto ? `<span class="badge">auto-paid</span>` : ""}</div>
     <div class="rc-lines">
       <span>For</span><span>${esc(units(d.pricing, rc.metered_units))} × ${fmt(rc.rate)} ${esc(rc.currency)}${rc.per > 1 ? ` / ${rc.per}` : ""}</span>
       ${verified != null ? `<span>Checked</span><span class="${verified ? "good" : "bad"}">${verified ? "You were charged for exactly what you received" : "What arrived did not match the price: a dispute was filed"}</span>` : ""}
-      ${saved != null ? `<span>Versus flat</span><span>A flat price would have been ${hbar(worst)} — you saved <b>${hbar(saved)}</b></span>` : ""}
-      ${rc.transaction_id ? `<span>Proof</span><span><a href="${esc(hashscanTx(rc.transaction_id))}" target="_blank" rel="noopener">View on HashScan ↗</a></span>` : `<span>Proof</span><span>On your prepaid tab; settles in a batch</span>`}
+      ${saved != null ? `<span>Versus flat</span><span>A flat price would have been ${amt(worst, rc.currency)} — you saved <b>${amt(saved, rc.currency)}</b></span>` : ""}
+      ${rc.transaction_id ? `<span>Proof</span><span><a href="${esc(txUrl(rc.transaction_id, rc.network))}" target="_blank" rel="noopener">View on ${explorerName(rc.network)} ↗</a></span>` : `<span>Proof</span><span>On your prepaid tab; settles in a batch</span>`}
     </div>${split}</div>`;
 }
 
@@ -802,7 +806,7 @@ document.addEventListener("input", (e) => {
   const l = M.services.find((x) => x.service_id === M.open);
   if (!l) return;
   const p = l.descriptor.pricing, n = Number(e.target.value);
-  $("pc-out").innerHTML = `${esc(units(p, n))} → <b>${money(priceFor(p, n))}</b>`;
+  $("pc-out").innerHTML = `${esc(units(p, n))} → <b>${moneyIn(priceFor(p, n), curOf(l))}</b>`;
 });
 
 loadSubs();

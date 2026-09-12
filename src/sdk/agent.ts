@@ -131,7 +131,9 @@ export class MeterX402Agent {
     if (!t) {
       const allowance = (this.o.useTabs as { allowance: string | number }).allowance;
       const w = this.mx.wallet;
-      t = createMeteredBuyer({ accountId: w.accountId, privateKey: w.privateKey, network: w.network })
+      // tabs are native Hedera allowances: an EVM or Solana wallet pays per call instead
+      if (!w.network.startsWith("hedera:")) return Promise.reject(new Error(`tabs need a Hedera wallet; this agent pays on ${w.network}`));
+      t = createMeteredBuyer({ accountId: w.accountId, privateKey: w.privateKey, network: w.network as "hedera:testnet" | "hedera:mainnet" })
         .openTab(service.endpoint, { allowance })
         .catch((e) => { this.tabs.delete(service.service_id); throw e; });
       this.tabs.set(service.service_id, t);
@@ -179,7 +181,7 @@ export class MeterX402Agent {
       const maxPrice = parseAmount(opts.maxPrice);
       if (maxPrice && amount > toAtomic(maxPrice.amount)) throw new BudgetError(`${card.name} quoted ${quote.amount} ${quote.currency}, above ${maxPrice.amount}`, quote);
       if (remaining != null && amount > toAtomic(remaining)) throw new BudgetError(`${card.name} quoted ${quote.amount} ${quote.currency}; only ${remaining} left in budget`, quote);
-      const payload = await this.mx.x402().createPaymentPayload(required);
+      const payload = await (await this.mx.x402()).createPaymentPayload(required);
       task = await a2aCall(card.url, "message/send", {
         message: {
           kind: "message", role: "user", messageId: crypto.randomUUID(), taskId: task.id, contextId: task.contextId,

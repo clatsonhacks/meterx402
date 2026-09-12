@@ -91,7 +91,28 @@ from `.env` (or a mock account offline). It is a demo wallet, not the visitor's.
 
 ---
 
+### Base, Solana, The Graph and Uniswap (2026-09-13)
+- **Base Sepolia and Solana devnet settlement.**
+  - Chain presets, per-chain buyer signing (viem, `@solana/kit`), and chain-side verification (EVM receipt logs, Solana balance deltas).
+  - Lanes `dex-pools-base` and `weather-solana`, and a wallet generator (`scripts/new-chain-wallets.ts`).
+  - Verified live: both gateways issue correct 402s, and the x402.org facilitator checks the signatures (refusal reasons: EVM `transfer amount exceeds balance`, Solana simulation of an unfunded token account).
+  - Real settlement waits on testnet USDC in the buyer wallets.
+- **The Graph.**
+  - `dex-pools` lane over 15 Messari standardized DEX subgraphs with one query.
+  - Per-source reports and a circuit breaker; `src/graph/server.ts` is started by `serve.ts` when `GRAPH_API_KEY` is set.
+  - Live: 8 to 9 of 15 sources answer; Base, Optimism and BSC Uniswap v3 time out or have bad indexers.
+- **Uniswap.**
+  - `uniswap-quote` lane over the Trading API, verified live on Base and Ethereum.
+  - The analyst's quote step understands CLASSIC and UniswapX routing. `FEEDBACK.md` is written.
+- **DEX analyst.**
+  - `mx402 analyst`, MCP `find_dex_pools` / `ask_dex_analyst`, a Playground panel, and `POST /playground/analyst`.
+  - Live runs paid 4 Hedera transactions each (0.016 and 0.017 HBAR).
+- **UI.** Prices, the pay sheet and receipts show the service's own currency and chain; USDC services skip the HBAR limits and ask first.
+
 ## ⏳ Pending
+
+- Fund the Base Sepolia and Solana devnet buyer wallets with testnet USDC, then run `scripts/live-chains.ts` for real settlements.
+- Submit the Uniswap developer feedback form with the link to FEEDBACK.md.
 
 In rough priority order.
 

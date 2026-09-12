@@ -351,6 +351,17 @@
         </div>
       </div>
 
+      <section class="card analyst" id="analyst" aria-labelledby="an-title">
+        <h2 id="an-title">Ask the DEX analyst</h2>
+        <span class="hint">An agent that pays for its own research. It buys LLM tokens to plan, pools from The Graph's standardized DEX subgraphs, a Uniswap quote, and LLM tokens to answer. Every step is an x402 payment with a receipt.</span>
+        <form class="an-ask" id="an-form">
+          <input type="text" id="an-q" placeholder="Where can USDC earn the most fees against ETH?" autocomplete="off" aria-label="Your question">
+          <button class="primary" id="an-run" type="submit">Ask</button>
+        </form>
+        <div class="an-examples" id="an-examples"></div>
+        <div id="an-out" hidden></div>
+      </section>
+
       <details class="card agents-note" id="agents-note">
         <summary>Building an AI agent? It can find and pay for these on its own.</summary>
         <div class="agent-code" id="agent-snippets"></div>
@@ -668,6 +679,7 @@
 <script src="/user.js"></script>
 <script src="/playground.js"></script>
 <script src="/app.js"></script>
+<script src="/analyst.js"></script>
 <script>
 // LLM Connection Modal Functions
 const claudeConfig = `{

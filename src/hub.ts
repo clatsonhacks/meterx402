@@ -234,10 +234,20 @@ const SELF = `http://127.0.0.1:${HUB_PORT}`;
 const pendingQuotes = new Map<string, import("./sdk/buyer.ts").PendingQuote>();
 const rounds = new Map<string, Round>();   // recent quote rounds, for /rfq/:id
 const playgroundSubs = new Map<string, import("./sdk/buyer.ts").SubscriptionHandle>();
-async function sdkBuyer() {
+/** The buyer for a service, on that service's chain: the Hedera wallet by
+ *  default, BUYER_EVM_PRIVATE_KEY for eip155:* and BUYER_SOLANA_SECRET_KEY for
+ *  solana:* services. */
+async function sdkBuyer(serviceId?: string) {
+  const { MeterX402 } = await import("./sdk/buyer.ts");
+  const network = serviceId ? registry.get(serviceId)?.descriptor.payment.settlement?.[0]?.network : undefined;
+  const other = network?.startsWith("eip155:") ? process.env.BUYER_EVM_PRIVATE_KEY
+    : network?.startsWith("solana:") ? process.env.BUYER_SOLANA_SECRET_KEY : undefined;
+  if (network && !network.startsWith("hedera:")) {
+    if (!other) throw new Error(`${serviceId} settles on ${network}: run scripts/new-chain-wallets.ts and fund the buyer`);
+    return new MeterX402({ wallet: { privateKey: other, network }, registry: SELF, autoDispute: true });
+  }
   const c = await creds();
   if (!c) return null;
-  const { MeterX402 } = await import("./sdk/buyer.ts");
   return new MeterX402({ wallet: c, registry: SELF, autoDispute: true });
 }
 
@@ -454,7 +464,9 @@ const server = createServer(async (req, res) => {
     // ── Playground: the lifecycle one step at a time, as a human ─────────
     if (req.method === "POST" && url.pathname === "/playground/quote") {
       const b = await readBody(req);
-      const mx = await sdkBuyer().catch(() => null);
+      let mx;
+      try { mx = await sdkBuyer(String(b.service_id)); }
+      catch (e) { return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e) }); }
       if (!mx) return json(res, 200, { ok: false, error: "no buyer wallet: set BUYER_ACCOUNT_ID/BUYER_PRIVATE_KEY in .env" });
       try {
         const q = await mx.quote(String(b.service_id), { path: b.path || undefined, method: b.method || undefined, body: b.body || undefined, query: b.query || undefined, maxUnits: b.maxUnits ? Number(b.maxUnits) : undefined });
@@ -462,6 +474,20 @@ const server = createServer(async (req, res) => {
         pendingQuotes.set(q.quote.quote_id, q);
         setTimeout(() => pendingQuotes.delete(q.quote.quote_id), Math.max(0, q.quote.expires_at - Date.now()) + 1000).unref?.();
         return json(res, 200, { ok: true, quote: q.quote, route: q.route, buyer: mx.accountId });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    // The DEX analyst: plan (LLM) → pools (The Graph) → quote (Uniswap) → answer
+    // (LLM), each step a metered x402 payment by the playground's buyer.
+    if (req.method === "POST" && url.pathname === "/playground/analyst") {
+      const b = await readBody(req);
+      const mx = await sdkBuyer().catch(() => null);
+      if (!mx) return json(res, 200, { ok: false, error: "no buyer wallet: set BUYER_ACCOUNT_ID/BUYER_PRIVATE_KEY in .env" });
+      try {
+        const { analyze } = await import("./graph/analyst.ts");
+        const report = await analyze(String(b.question ?? ""), { buyer: mx, maxPools: b.maxPools ? Number(b.maxPools) : undefined, quote: b.quote === false ? false : undefined });
+        return json(res, 200, { ok: true, report });
       } catch (e) {
         return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
       }

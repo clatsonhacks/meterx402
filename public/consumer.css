@@ -681,3 +681,28 @@ body.mode-deployer .primary:hover { box-shadow: 0 4px 12px oklch(0.54 0.21 293 /
 :root .llm-step-num, :root .copy-btn { background: var(--accent); color: #fff; }
 :root .copy-btn:hover { background: var(--accent-hover, var(--accent)); filter: brightness(1.08); }
 :root .code-block, :root .llm-step-content code { background: var(--bg-inset); border-color: var(--border); color: var(--text-primary); }
+
+/* ── DEX analyst (Playground) ─────────────────────────────────────────── */
+.analyst { margin-top: 16px; }
+.analyst h2 { margin: 0 0 4px; font-size: 17px; letter-spacing: -0.01em; }
+.analyst > .hint { display: block; max-width: 72ch; }
+.an-ask { display: flex; gap: 8px; margin-top: 12px; }
+.an-ask input { flex: 1; min-width: 0; }
+.an-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.an-examples .chip {
+  font: inherit; font-size: 12px; padding: 4px 10px; border-radius: var(--radius-pill);
+  border: 1px solid var(--border); background: var(--bg-inset); color: var(--text-secondary); cursor: pointer;
+}
+.an-examples .chip:hover { border-color: var(--accent); color: var(--accent); }
+#an-out { margin-top: 14px; display: grid; gap: 10px; }
+.an-answer { font-size: 14.5px; line-height: 1.6; color: var(--text-primary); }
+.an-meta { font-size: 12px; color: var(--text-tertiary); }
+.an-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.an-steps li { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; display: grid; gap: 2px; background: var(--bg-overlay); min-width: 0; }
+.an-steps li b { font-size: 13px; }
+.an-steps li span { font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.an-steps li.done { border-color: color-mix(in oklch, var(--success) 45%, var(--border)); }
+.an-steps li.skip { opacity: 0.7; }
+.an-steps li.wait b::after { content: " …"; }
+.an-facts { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+@media (max-width: 600px) { .an-ask { flex-direction: column; } }
