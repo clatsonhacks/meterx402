@@ -8,19 +8,26 @@
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/ui.css">
 </head>
-<body>
+<body class="mode-user">
 <div class="topbar"><div class="topbar-in">
-  <div class="brand">💧 MeterX402<small>a payment layer for APIs and agents</small></div>
+  <div class="brand">💧 MeterX402<small>pay only for what you use</small></div>
   <div class="switch" role="group" aria-label="Mode">
-    <button id="mode-user" aria-pressed="true" title="Find, try and integrate services">
+    <button id="mode-user" aria-pressed="true" title="Find and use services">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>User</button>
-    <button id="mode-deployer" aria-pressed="false" title="Publish services and watch them earn">
+    <button id="mode-deployer" aria-pressed="false" title="Sell your API and watch it earn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Deployer</button>
   </div>
   <div class="status">
-    <span class="chip" id="mode">…</span>
-    <span class="chip"><span class="dot" id="wsdot"></span><span id="wstext">connecting</span></span>
-    <span class="chip" id="hcs" hidden></span>
+    <span class="chip user-only" id="net-chip" title="Payments use test HBAR on Hedera testnet: no real money">Testnet</span>
+    <div class="walletwrap user-only">
+      <button class="walletbtn" id="wallet-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="wallet-pop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="16.5" cy="13.5" r="1.2"/></svg>
+        <span id="wallet-amt">Wallet</span></button>
+      <div class="walletpop card" id="wallet-pop" role="dialog" aria-label="Wallet and spending limits" hidden></div>
+    </div>
+    <span class="chip dep-only" id="mode">…</span>
+    <span class="chip dep-only"><span class="dot" id="wsdot"></span><span id="wstext">connecting</span></span>
+    <span class="chip dep-only" id="hcs" hidden></span>
   </div>
 </div></div>
 
@@ -29,40 +36,63 @@
   <!-- ═══════════════════════════ USER ═══════════════════════════ -->
   <section class="view" id="view-user">
     <div class="subnav" role="tablist" aria-label="User views">
-      <button role="tab" id="tab-market" aria-selected="true">Marketplace</button>
-      <button role="tab" id="tab-play" aria-selected="false">Playground</button>
+      <button role="tab" id="tab-market" aria-selected="true">Explore</button>
+      <button role="tab" id="tab-activity" aria-selected="false">Activity</button>
+      <button role="tab" id="tab-play" aria-selected="false">Developers</button>
     </div>
 
+    <!-- Explore -->
     <div id="user-market">
-      <div class="lede">Agent marketplace</div>
-      <span class="lede-sub" id="mkt-sub">Services and agents priced by what each call uses, settled on Hedera, rated from real payment evidence.</span>
+      <div class="hero-x">
+        <h1>Pay only for what you use.</h1>
+        <p>AI, weather, markets and blockchain data, priced by how much you actually get, with a spending limit you set.</p>
+        <div class="search big">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="mkt-q" placeholder="What do you need? Try “weather”, “chat” or “crypto”" aria-label="Search services" autocomplete="off">
+        </div>
+        <div class="cats" id="mkt-caps" role="group" aria-label="Categories"></div>
+      </div>
 
-      <details class="card agents-note" id="agents-note">
-        <summary>Building an AI agent? It doesn't need this page.</summary>
-        <div class="label" style="margin-top:6px">Agents find the same services programmatically: through the registry API, the MCP server, or A2A agent cards. This page is the human view of the same data.</div>
-        <div class="grid" id="agent-snippets"></div>
-      </details>
+      <div class="howto card" id="howto" hidden>
+        <div class="howto-step"><span class="hs-ic">🔎</span><div><b>Find a service</b><span>Rated by real payments, not reviews.</span></div></div>
+        <div class="howto-step"><span class="hs-ic">🎚️</span><div><b>Set your limit</b><span>The most you'll pay per request. Nothing above it is signed.</span></div></div>
+        <div class="howto-step"><span class="hs-ic">✅</span><div><b>Pay for what you get</b><span>The service measures your request and shows the exact price first.</span></div></div>
+        <button class="ghost" id="howto-ok">Got it</button>
+      </div>
 
       <div class="toolbar">
-        <div class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input type="text" id="mkt-q" placeholder="Search: weather, crypto prices, text generation, blockchain…" aria-label="Search services">
-        </div>
+        <span class="label" id="mkt-sub" aria-live="polite"></span>
+        <span class="spacer"></span>
+        <label class="check"><input type="checkbox" id="mkt-rated"> Trusted only</label>
         <select id="mkt-sort" aria-label="Sort">
-          <option value="best">Best match</option>
-          <option value="cheap">Cheapest</option>
-          <option value="rep">Highest reputation</option>
+          <option value="best">Recommended</option>
+          <option value="cheap">Lowest price</option>
+          <option value="rep">Most trusted</option>
           <option value="fast">Fastest</option>
         </select>
-        <label class="check"><input type="checkbox" id="mkt-rated"> rated only</label>
       </div>
-      <div class="chips" id="mkt-caps"></div>
       <div class="mkt" id="mkt-grid"></div>
     </div>
 
+    <!-- Activity -->
+    <div id="user-activity" hidden>
+      <div class="lede">Your activity</div>
+      <span class="lede-sub">Everything this wallet paid for, what it got, and the proof on Hedera.</span>
+      <div class="act-kpis" id="act-kpis"></div>
+      <div class="card" id="act-list"></div>
+    </div>
+
+    <!-- Developers -->
     <div id="user-play" hidden>
-      <div class="lede">Playground</div>
-      <span class="lede-sub">Pick a service and a way in. The code is generated from the service's live descriptor, and <b>Run</b> performs the same call through this hub, one lifecycle step at a time, with real settlement.</span>
+      <div class="lede">Developers</div>
+      <span class="lede-sub">Everything on this page is also available to code and AI agents. Pick a service and a way in: the code is generated from the service's live descriptor, and <b>Run</b> performs the same call, one lifecycle step at a time, with real settlement.</span>
+
+      <details class="card agents-note" id="agents-note" open>
+        <summary>Building an AI agent? It can find and pay for these services on its own.</summary>
+        <div class="label" style="margin-top:6px">Agents use the registry API, the MCP server, or A2A agent cards. The Explore tab is the human view of the same data.</div>
+        <div class="grid" id="agent-snippets"></div>
+      </details>
+
       <div class="pg">
         <div class="card">
           <div class="form">
@@ -92,42 +122,88 @@
 
   <!-- ═══════════════════════════ DEPLOYER ═══════════════════════════ -->
   <section class="view" id="view-deployer" hidden>
-    <div class="toolbar" style="margin-bottom:10px">
-      <div><div class="lede" style="margin:0 0 2px 0">Your services</div><span class="lede-sub" style="margin:0">Publish APIs, set prices, watch metered income settle on Hedera.</span></div>
+    <div class="toolbar" style="margin-bottom:10px;align-items:flex-end">
+      <div><div class="lede" style="margin:0 0 2px 0">Your services</div><span class="earn" id="earn-line">Sell any API by usage. Buyers pay for exactly what each call returns.</span></div>
       <span class="spacer"></span>
       <span class="field" style="flex-direction:row;align-items:center;gap:8px">Payout wallet
         <input type="text" id="owner" placeholder="all wallets (0.0.x / 0x…)" style="width:220px"></span>
     </div>
 
-    <details class="card publish" id="publish">
-      <summary>＋ Publish an API</summary>
-      <div class="cols">
-        <div class="form">
-          <label>API URL<input type="text" id="pub-url" placeholder="https://api.open-meteo.com/v1/forecast"></label>
-          <div class="trio"><label>Method<select id="pub-method"><option>GET</option><option>POST</option></select></label><label>Sample path and query<input type="text" id="pub-sample" placeholder="/?latitude=13&amp;longitude=80&amp;hourly=temperature_2m"></label></div>
-          <label>Sample body (for POST)<textarea id="pub-body" rows="2" placeholder='{"query": "{ pools(first: 5) { id } }"}'></textarea></label>
-          <div class="pair">
-            <label>Auth header, kept on your gateway<input type="text" id="pub-header" placeholder="Authorization: Bearer …"></label>
-            <label>Auth query parameter<input type="text" id="pub-query" placeholder="apikey=…"></label>
-          </div>
-          <div class="pair">
-            <label>Name<input type="text" id="pub-name" placeholder="weather"></label>
-            <label>Capabilities, comma separated<input type="text" id="pub-caps" placeholder="inferred if empty"></label>
-          </div>
-          <label>Description<input type="text" id="pub-desc" placeholder="one line for humans and agents"></label>
-          <div class="pair">
-            <label>Payout wallet<input type="text" id="pub-wallet" placeholder="WALLET from .env"></label>
-            <label class="check" style="flex-direction:row;align-items:center;margin-top:18px"><input type="checkbox" id="pub-tab"> offer Metered Tabs</label>
-          </div>
-          <div class="runbar"><button class="ghost" id="pub-check">Check (dry run, free)</button><button class="primary" id="pub-go">Publish</button></div>
-        </div>
-        <div>
-          <div id="pub-result" class="label">Check an API to see what it would be metered on and what calls would cost. Nothing is charged.</div>
-          <div class="snippet" id="pub-cli" style="margin-top:10px"></div>
-          <div id="pub-list" style="margin-top:10px"></div>
-        </div>
+    <section class="card sell" id="publish">
+      <div class="sell-head">
+        <div class="sell-ic" aria-hidden="true">🚀</div>
+        <div style="flex:1;min-width:220px"><div class="sell-title">Sell your API</div><div class="label">Paste a URL. We call it once, work out what to count, and suggest a price per unit. About a minute, and free to try.</div></div>
+        <button class="primary" id="sell-open" aria-expanded="false" aria-controls="sell-body">＋ Sell an API</button>
       </div>
-    </details>
+      <div id="sell-body" hidden>
+        <ol class="stepper" id="stepper"><li data-s="1">Connect</li><li data-s="2">Price</li><li data-s="3">Get paid</li></ol>
+
+        <div class="sstep" id="ss-1">
+          <div class="form">
+            <label>Your API's URL<input type="text" id="pub-url" placeholder="https://api.open-meteo.com/v1/forecast" inputmode="url"></label>
+            <label>An example request (path and query)<input type="text" id="pub-sample" placeholder="/?latitude=13&amp;longitude=80&amp;hourly=temperature_2m"></label>
+            <details class="adv"><summary>It's a POST API</summary>
+              <div class="form" style="margin-top:8px">
+                <label>Method<select id="pub-method"><option>GET</option><option>POST</option></select></label>
+                <label>Example body<textarea id="pub-body" rows="2" placeholder='{"query": "{ pools(first: 5) { id } }"}'></textarea></label>
+              </div>
+            </details>
+            <details class="adv"><summary>It needs an API key</summary>
+              <div class="label" style="margin:6px 0">Your key stays on your server. Buyers never see it, and it is never sent to them.</div>
+              <div class="pair">
+                <label>As a header<input type="text" id="pub-header" placeholder="Authorization: Bearer …"></label>
+                <label>Or a query parameter<input type="text" id="pub-query" placeholder="apikey=…"></label>
+              </div>
+            </details>
+            <div class="runbar"><button class="primary" id="pub-check">Check my API (free)</button><span class="label">We call it once. Nothing is charged or published.</span></div>
+            <div id="pub-check-msg"></div>
+          </div>
+        </div>
+
+        <div class="sstep" id="ss-2" hidden>
+          <div class="cols">
+            <div class="form">
+              <div id="pub-found"></div>
+              <div class="pair">
+                <label>One unit is called<input type="text" id="pub-unitlabel" placeholder="row"></label>
+                <label>Price per unit (HBAR)<input type="number" id="pub-rate" min="0" step="any"></label>
+              </div>
+              <div class="label" id="pub-rate-usd"></div>
+              <label>Name buyers will see<input type="text" id="pub-title" placeholder="Weather Forecast"></label>
+              <label>What it does, in one line<input type="text" id="pub-desc" placeholder="Hourly forecasts for any place on Earth"></label>
+              <label>Category<input type="text" id="pub-caps" placeholder="weather_forecast"></label>
+              <input type="hidden" id="pub-name"><input type="hidden" id="pub-per" value="1">
+              <div class="runbar"><button class="ghost" data-go="1">Back</button><button class="primary" data-go="3">Continue</button></div>
+            </div>
+            <div>
+              <div class="label" style="margin-bottom:6px">What buyers would pay</div>
+              <div id="pub-prices"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sstep" id="ss-3" hidden>
+          <div class="cols">
+            <div class="form">
+              <label>Where should payments go? (your Hedera account)<input type="text" id="pub-wallet" placeholder="0.0.… (WALLET from .env if empty)"></label>
+              <label class="check"><input type="checkbox" id="pub-tab"> Let buyers prepay and stream answers (Metered Tabs)</label>
+              <div class="label">Each paid call settles straight to your account on Hedera. MeterX402 never holds your money.</div>
+              <div class="runbar"><button class="ghost" data-go="2">Back</button><button class="primary" id="pub-go">Publish</button></div>
+              <div id="pub-result"></div>
+            </div>
+            <div>
+              <div class="label" style="margin-bottom:6px">How buyers will see it</div>
+              <div id="pub-preview"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sstep done" id="ss-done" hidden></div>
+
+        <details class="adv" style="margin-top:14px"><summary>Prefer the terminal?</summary><div class="snippet" id="pub-cli" style="margin-top:8px"></div></details>
+      </div>
+      <div id="pub-list"></div>
+    </section>
 
   <div class="grid kpis">
     <div class="card"><div class="label">Income</div><div class="hero" id="k-income">0<small>HBAR</small></div><div class="sub" id="k-income-sub">across every metered API</div></div>
@@ -146,7 +222,7 @@
       </div>
       <div class="card">
         <div class="label">Calls by hour (UTC)</div>
-        <svg class="chart" id="c-hours" role="img" aria-label="Paid calls by hour of day" style="height:140px"></svg>
+        <svg class="chart" id="c-hours" role="img" aria-label="Paid calls by hour of day" style="height:196px"></svg>
       </div>
     </div>
   </div>
@@ -164,7 +240,7 @@
         <thead><tr><th>service</th><th>capabilities</th><th>price</th><th>interfaces</th><th>reputation</th><th class="num">paid calls</th><th class="num">median ms</th><th class="num">uptime</th><th class="num">disputes</th></tr></thead>
         <tbody id="registry"><tr><td colspan="9" class="empty">No services registered yet</td></tr></tbody>
       </table>
-      <div class="sub" id="anchor-note" style="margin-top:6px"></div>
+      <div class="sub" id="anchor-note" style="margin-top:8px"></div>
     </div>
   </div>
 
@@ -196,8 +272,11 @@
 </div>
 <div class="tip" id="tip" hidden></div>
 <div id="drawer-root"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script src="/deployer.js"></script>
+<script src="/ux.js"></script>
+<script src="/recipes.js"></script>
 <script src="/user.js"></script>
 <script src="/playground.js"></script>
 <script src="/app.js"></script>

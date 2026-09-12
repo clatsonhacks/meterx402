@@ -36,6 +36,7 @@ export const ServiceDescriptor = z.object({
   mx402: z.literal(PROTOCOL_VERSION),
   service_id: z.string().regex(/^[a-z0-9][a-z0-9-_.]{0,62}$/, "lowercase slug"),
   name: z.string().min(1),
+  title: z.string().optional(),        // display name for people ("Weather Forecast")
   description: z.string().optional(),
   type: z.enum(["rest", "graphql", "llm", "mcp", "a2a"]),
   endpoint: z.string().url(),          // the payment-enabled base URL buyers call
@@ -44,6 +45,7 @@ export const ServiceDescriptor = z.object({
   pricing: z.object({
     meter: z.string(),                 // tokens | rows:<path> | bytes | ms | json:<path> | request
     unit: z.string(),
+    unit_label: z.string().optional(), // one unit in plain words ("forecast hour")
     rate: decimal,                     // price per `per` units
     per: z.number().positive(),
     min: decimal,
