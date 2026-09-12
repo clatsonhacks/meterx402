@@ -28,15 +28,15 @@ export class X402ExactAdapter implements SettlementAdapter {
   get network() { return this.opts.network; }
 
   capabilities(): Capability[] {
-    const nativeHbar = this.preset.name === "hedera";
     return [{
       network: this.opts.network,
-      asset: nativeHbar ? "0.0.0" : "USDC",
+      asset: this.preset.asset,
       currency: this.preset.currency,
       decimals: this.preset.decimals,
       // tabs are layered on by the gateway when a TabLedger is configured
       schemes: this.opts.tabs ? ["exact", "tab"] : ["exact"],
       facilitator: this.opts.facilitator,
+      ...(this.preset.fee ? { fee: this.preset.fee } : {}),
     }];
   }
 
@@ -100,9 +100,21 @@ export class X402ExactAdapter implements SettlementAdapter {
   async verify(transaction: string, payTo: string): Promise<Verification> {
     if (!this.opts.network.startsWith("hedera:")) return { verified: false, detail: `no independent verifier for ${this.opts.network} yet` };
     const { mirrorTransfer } = await import("../hedera.ts");
-    const r = await mirrorTransfer(transaction, payTo);
-    return r.found
-      ? { verified: r.result === "SUCCESS", credited: r.tinybar, detail: `mirror node: ${r.result}, ${r.tinybar} tinybar to ${payTo}` }
-      : { verified: false, detail: "not found on the mirror node" };
+    const asset = this.preset.asset;
+    const r = await mirrorTransfer(transaction, payTo, asset);
+    if (!r.found) return { verified: false, detail: "not found on the mirror node" };
+    const unit = asset === "0.0.0" ? "tinybar" : this.preset.currency;
+    // With an inclusive custom fee the seller nets less than the buyer signed
+    // for. Say so plainly rather than reporting a shortfall as a failure.
+    const fees = r.assessedFees ?? [];
+    const taken = fees.reduce((s, f) => s + f.amount, 0n);
+    const feeNote = taken > 0n
+      ? `; ledger took ${taken} ${unit} in custom fees (${fees.map((f) => f.collector).join(", ")}), seller nets ${r.tinybar}`
+      : "";
+    return {
+      verified: r.result === "SUCCESS",
+      credited: r.gross ?? r.tinybar,
+      detail: `mirror node: ${r.result}, ${r.tinybar} ${unit} to ${payTo}${feeNote}`,
+    };
   }
 }

@@ -115,11 +115,28 @@ export async function resolveOrCreateAccount(addr: string): Promise<HederaAccoun
   return null;
 }
 
-/** HBAR credited to `account` by transaction `txId`, read off the mirror node
- *  with none of our code in the loop. Used by the live test. */
-export async function mirrorTransfer(txId: string, account: string): Promise<{ found: boolean; tinybar: bigint; result?: string }> {
+/** What `account` was actually credited by transaction `txId`, read off the
+ *  mirror node with none of our code in the loop.
+ *
+ *  For an HTS asset this also reports the fees CONSENSUS assessed on the
+ *  transfer (a token's custom fee schedule), which is the difference between
+ *  what the buyer signed for and what the seller nets. Used by the live test
+ *  and by SettlementAdapter.verify. */
+export interface MirrorCredit {
+  found: boolean;
+  /** credited amount in the asset's atomic units (tinybar for HBAR) */
+  tinybar: bigint;
+  result?: string;
+  /** ledger-assessed custom fees on this transfer, if any */
+  assessedFees?: { amount: bigint; collector: string; token: string | null }[];
+  /** gross = credit + fees taken out of it (inclusive fees) */
+  gross?: bigint;
+}
+
+export async function mirrorTransfer(txId: string, account: string, asset = "0.0.0"): Promise<MirrorCredit> {
   // mirror wants 0.0.x-sss-nnn
   const id = txId.replace("@", "-").replace(/\.(\d+)$/, "-$1");
+  const isHbar = !asset || asset === "0.0.0";
   for (let i = 0; i < 20; i++) {
     try {
       const r = await fetch(`${MIRROR()}/transactions/${id}`);
@@ -127,8 +144,15 @@ export async function mirrorTransfer(txId: string, account: string): Promise<{ f
         const j: any = await r.json();
         const t = j.transactions?.[0];
         if (t) {
-          const credit = (t.transfers ?? []).filter((x: any) => x.account === account).reduce((s: bigint, x: any) => s + BigInt(x.amount), 0n);
-          return { found: true, tinybar: credit, result: t.result };
+          const credit = isHbar
+            ? (t.transfers ?? []).filter((x: any) => x.account === account).reduce((s: bigint, x: any) => s + BigInt(x.amount), 0n)
+            : (t.token_transfers ?? []).filter((x: any) => x.account === account && x.token_id === asset)
+                .reduce((s: bigint, x: any) => s + BigInt(x.amount), 0n);
+          const assessedFees = (t.assessed_custom_fees ?? [])
+            .filter((f: any) => isHbar ? !f.token_id : f.token_id === asset)
+            .map((f: any) => ({ amount: BigInt(f.amount ?? 0), collector: String(f.collector_account_id ?? ""), token: f.token_id ?? null }));
+          const taken = assessedFees.reduce((s: bigint, f: { amount: bigint }) => s + f.amount, 0n);
+          return { found: true, tinybar: credit, result: t.result, assessedFees, gross: credit + taken };
         }
       }
     } catch {}

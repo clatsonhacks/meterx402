@@ -26,7 +26,7 @@ import { emit, mxe, HUB_URL, type MXEventType } from "./events.ts";
 import { makeMeter } from "./meters.ts";
 import { quote, fromAtomic, toAtomic, priceAtomic, bindingCap, describeRate, type RateCard, type Quote } from "./pricing.ts";
 import { HoldStore, RateLimiter, fingerprint, sha256 } from "./holds.ts";
-import { CHAINS, explorerTx, type ChainPreset } from "./chains.ts";
+import { CHAINS, explorerTx, hederaTokenPreset, type ChainPreset } from "./chains.ts";
 import { verifySessionToken } from "./world.ts";
 import { TabBook, hederaTabLedger, mockTabLedger, type Tab, type TabLedger } from "./tabs.ts";
 import { parseHederaKey } from "./hedera.ts";
@@ -44,6 +44,7 @@ export interface GatewayConfig {
   meter: string;               // meter spec, see meters.ts
   card: Omit<RateCard, "unit">;
   chain?: string;              // preset name (default hedera)
+  asset?: string;              // settle in an HTS token id instead of native HBAR
   network?: string;            // override the preset's network id
   facilitator?: string;        // override the preset's facilitator
   headers?: Record<string, string>; // injected upstream auth headers (never shown to buyers)
@@ -105,10 +106,16 @@ const parseCap = (v: string | undefined): number | undefined => {
 };
 
 export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; descriptor: ServiceDescriptor; close(): Promise<void>; server: ServerType }> {
-  const chain: ChainPreset = CHAINS[cfg.chain ?? "hedera"] ?? (() => {
+  let chain: ChainPreset = CHAINS[cfg.chain ?? "hedera"] ?? (() => {
     throw new Error(`unknown chain "${cfg.chain}". try: ${Object.keys(CHAINS).join(", ")}`);
   })();
   const network = (cfg.network ?? chain.network) as `${string}:${string}`;
+  // Settle in an HTS token: same scheme, same facilitator, different asset.
+  // Decimals, symbol and any ledger-assessed fee come from the token itself.
+  if (cfg.asset && cfg.asset !== "0.0.0") {
+    if (chain.name !== "hedera") throw new Error("--asset is a Hedera (HTS) feature; drop --chain or use an HTS token id");
+    chain = await hederaTokenPreset(cfg.asset, chain, network);
+  }
   const explorer = { explorer: network === "hedera:mainnet" ? "hashscan-mainnet" as const : chain.explorer };
   const facilitatorUrl = cfg.facilitator ?? process.env.FACILITATOR_URL ?? chain.facilitator;
   const meter = makeMeter(cfg.meter);
@@ -134,7 +141,9 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
   const holds = new HoldStore<Held>({ ttlMs: holdTtlSec * 1000, maxPerClient: cfg.maxHolds ?? 3, maxTotal: cfg.maxHoldTotal ?? 1000 });
   const limiter = new RateLimiter(cfg.rpm ?? 0);
 
-  if (cfg.tab && chain.name !== "hedera") throw new Error("--tab needs Hedera (allowances are a native Hedera feature)");
+  if (cfg.tab && chain.name !== "hedera") throw new Error(chain.asset !== "0.0.0"
+    ? "--tab settles HBAR allowances, so it cannot be combined with --asset yet"
+    : "--tab needs Hedera (allowances are a native Hedera feature)");
   const tabFlushAt = toAtomic(cfg.tab?.flushAt ?? "0.01", chain.decimals);
   const tabs = cfg.tab ? new TabBook({
     lane, ledger: cfg.tab.ledger, spender: cfg.tab.spender, payTo: cfg.payTo, flushAt: tabFlushAt,
@@ -783,6 +792,8 @@ Lane:
   --wallet <acct>     payout account (Hedera 0.0.x or 0x…)                                               [required]
   --name <label>      lane name                                                        [derived from host]
   --port <n>          local port                                                                         [4030]
+  --asset <token-id>  settle in an HTS token instead of HBAR (decimals and any
+                      ledger-assessed fee are read from the token)            [0.0.0 = HBAR]
   --chain <name>      hedera | base | base-sepolia | solana                                              [hedera]
   --network <id>      override the network id (e.g. hedera:mainnet)
   --facilitator <url> override the facilitator (default blocky402 for hedera)
@@ -816,7 +827,7 @@ on-chain), then call with no per-call payment; the gateway settles usage in batc
 export function parseArgs(argv: string[]): GatewayConfig {
   const flag = (n: string, d?: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
   const flagAll = (n: string) => argv.reduce<string[]>((acc, a, i) => (a === `--${n}` && argv[i + 1] ? [...acc, argv[i + 1]] : acc), []);
-  const valueFlags = new Set(["wallet", "pay-to", "rate", "per", "min", "free", "max-units", "meter", "name", "port", "chain", "network", "facilitator", "header", "query", "sample", "method", "body", "hub", "hold-ttl", "max-holds", "rpm", "tab-flush", "tab-every", "service-id", "capability", "description", "type", "public-url", "registry"]);
+  const valueFlags = new Set(["wallet", "pay-to", "rate", "per", "min", "free", "max-units", "meter", "name", "port", "chain", "asset", "network", "facilitator", "header", "query", "sample", "method", "body", "hub", "hold-ttl", "max-holds", "rpm", "tab-flush", "tab-every", "service-id", "capability", "description", "type", "public-url", "registry"]);
   const upstream = argv.find((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--") && valueFlags.has(argv[i - 1].slice(2))));
   if (!upstream || argv.includes("--help")) { console.log(GATEWAY_HELP); process.exit(upstream ? 0 : 1); }
   const payTo = flag("wallet") ?? flag("pay-to");
@@ -835,6 +846,7 @@ export function parseArgs(argv: string[]): GatewayConfig {
     meter: flag("meter", "request")!,
     card: { rate: flag("rate", "0.01")!, per: flag("per", "1")!, min: flag("min", "0")!, free: optNum("free"), maxUnits: optNum("max-units") },
     chain: flag("chain", "hedera"),
+    asset: flag("asset"),
     network: flag("network"),
     facilitator: flag("facilitator"),
     headers,

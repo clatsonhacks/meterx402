@@ -40,6 +40,10 @@ export interface MeterX402Options {
   wallet: WalletConfig;
   /** Session budget, e.g. "1 HBAR" or 1. Enforced before anything is signed. */
   budget?: string | number;
+  /** HTS token ids this wallet may pay in, besides native HBAR. A seller can
+   *  quote any asset it likes; without an explicit opt-in here the buyer will
+   *  not sign a transfer of it. */
+  assets?: string[];
   /** Refuse any single call above this. */
   maxPerCall?: string | number;
   /** The registry to discover services in (a MeterX402 hub). */
@@ -104,6 +108,7 @@ export class MeterX402 {
   private key: PrivateKey;
   private signer;
   private budget: { atomic: bigint; currency?: string } | null;
+  private assets: string[];
   private maxPerCall: { atomic: bigint; currency?: string } | null;
   private _spent = 0n;
   private reserved = 0n;
@@ -119,6 +124,7 @@ export class MeterX402 {
     const b = parseAmount(opts.budget), m = parseAmount(opts.maxPerCall);
     this.budget = b ? { atomic: toAtomic(b.amount), currency: b.currency } : null;
     this.maxPerCall = m ? { atomic: toAtomic(m.amount), currency: m.currency } : null;
+    this.assets = opts.assets ?? [];
     this.registryUrl = opts.registry?.replace(/\/+$/, "");
     this.autoDispute = opts.autoDispute ?? true;
   }
@@ -213,6 +219,10 @@ export class MeterX402 {
     }
     if (req.maxUnits && quote.units > req.maxUnits) throw new BudgetError(`quote bills ${quote.units} ${quote.unit}, above the cap of ${req.maxUnits}`, quote);
     if (Date.now() > quote.expires_at) throw new BudgetError("quote expired", quote);
+    const asset = paymentRequired.accepts?.[0]?.asset;
+    if (!this.allowsAsset(asset)) {
+      throw new BudgetError(`this wallet will not pay in ${quote.currency} (${asset}): pass it in \`assets\` to opt in`, quote);
+    }
 
     const authorization: PaymentAuthorization = {
       mx402: PROTOCOL_VERSION, kind: "exact", buyer: this.accountId, service_id: quote.service_id, network: quote.network as any,
@@ -236,14 +246,20 @@ export class MeterX402 {
     }
   }
 
-  /** The x402 client, signing only within this buyer's per-call ceiling. */
+  /** The x402 client, signing only this buyer's allowed assets and ceiling. */
   x402() {
     const client = new x402Client().register(this.network, new ExactHederaScheme(this.signer) as any);
+    const cap = this.maxPerCall ? { maxAmountPerPayment: this.maxPerCall.atomic.toString() } : {};
     client.setSpendControls({
       maxAmountPerPayment: false,
-      allowedAssets: [{ network: this.network, asset: "0.0.0", ...(this.maxPerCall ? { maxAmountPerPayment: this.maxPerCall.atomic.toString() } : {}) }],
+      allowedAssets: ["0.0.0", ...this.assets].map((asset) => ({ network: this.network, asset, ...cap })),
     });
     return client;
+  }
+
+  /** Would this wallet sign a transfer of that asset at all? */
+  allowsAsset(asset: string | undefined) {
+    return !asset || asset === "0.0.0" || this.assets.includes(asset);
   }
 
   // ── receipt + verification ──────────────────────────────────────────────

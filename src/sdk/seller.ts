@@ -40,6 +40,8 @@ export interface WrapOptions {
   query?: Record<string, string>;
   facilitator?: string;
   chain?: string;
+  /** Settle in an HTS token id instead of native HBAR. */
+  asset?: string;
   /** Offer Metered Tabs: the spender account that pulls allowances. */
   tab?: { spenderId: string; spenderKey: string; mockLedgerUrl?: string; flushAt?: string; flushEverySec?: number };
   quiet?: boolean;
@@ -71,7 +73,7 @@ export async function wrap(o: WrapOptions): Promise<WrappedService> {
   const cfg: GatewayConfig = {
     upstream: o.upstream, name, port: o.port ?? 4030, payTo: o.wallet, meter,
     card: { rate: rate ?? "0.01", per: per ?? 1, min: min ?? 0, free: o.free, maxUnits },
-    chain: o.chain, facilitator: o.facilitator, headers: o.headers, query: o.query,
+    chain: o.chain, asset: o.asset, facilitator: o.facilitator, headers: o.headers, query: o.query,
     sample: o.sample, sampleMethod: o.method, sampleBody: o.body,
     hub: o.registry === undefined ? undefined : o.registry,
     serviceId: o.serviceId, capabilities: o.capabilities, description: o.description, publicUrl: o.publicUrl,

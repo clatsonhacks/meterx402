@@ -29,6 +29,15 @@ export const SettlementOption = z.object({
   decimals: z.number().int().min(0),
   schemes: z.array(z.enum(["exact", "tab"])).min(1),
   facilitator: z.string().optional(),
+  /** A fee the LEDGER assesses on every transfer of this asset (HTS custom
+   *  fee schedule). Disclosed so a buyer knows what the seller actually nets;
+   *  it is not added to the price, and no code here collects it. */
+  fee: z.object({
+    percent: decimal,
+    collector: z.string(),
+    assessment: z.enum(["inclusive", "exclusive"]),
+    source: z.literal("hts-custom-fee"),
+  }).optional(),
 });
 export type SettlementOption = z.infer<typeof SettlementOption>;
 
