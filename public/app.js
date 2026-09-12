@@ -59,8 +59,7 @@ $("tab-activity").onclick = () => setUserTab("activity");
 $("tab-play").onclick = () => setUserTab("play");
 
 // "How it works", until it's been read once
-if (localStorage.getItem("mx402.howto") !== "done") $("howto").hidden = false;
-$("howto-ok").onclick = () => { $("howto").hidden = true; try { localStorage.setItem("mx402.howto", "done"); } catch {} };
+// (the old three-step "how it works" strip is now the hero's live receipt: see home.js)
 
 // ── Deployer: earnings, in a sentence ───────────────────────────────────
 function renderEarnLine() {
