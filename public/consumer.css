@@ -181,7 +181,10 @@
 .topbar-in { min-height: 52px; }
 
 /* The service mark is the first thing read on a card: give it room. */
-.avatar { width: 40px; height: 40px; border-radius: 10px; }
+/* .cat is also the filter-chip class (padded flex); a mark must not inherit that. */
+.avatar, .avatar.cat { width: 40px; height: 40px; border-radius: 10px; padding: 0; display: grid; place-items: center; gap: 0; flex: none; }
+.avatar.cat svg { flex: none; }
+.avatar.cat, .avatar.cat:hover { border: 0; cursor: inherit; transform: none; }
 .avatar.cat svg { width: 22px; height: 22px; }
 .avatar.cat.big { width: 48px; height: 48px; }
 .avatar.cat.big svg { width: 26px; height: 26px; }
@@ -526,3 +529,103 @@ details.raw, details.what { margin-top: 10px; }
   .spin, .skeleton > *, .streaming .cursor { animation: none; }
   .toast { animation: none; }
 }
+
+/* ── layout pass: tabs, density, sentence case ─────────────────────────────
+   Most of the "clumsy" came from three things: .label is uppercase with wide
+   tracking and was being used for whole sentences; .two was never defined in
+   the new stylesheet, so every two-column section stacked; and lane cards were
+   full width by default. */
+
+/* Sentences are not eyebrows. */
+.label { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 500; }
+.hint { color: var(--text-tertiary); font-size: 12.5px; line-height: 1.45; }
+.lede-sub { font-size: 14px; max-width: 60ch; margin-bottom: 14px; }
+.section > .head { align-items: baseline; gap: 10px; }
+
+/* A1: brand and theme together, top left */
+.topleft { display: flex; align-items: center; gap: 14px; min-width: 0; }
+@media (max-width: 1100px) { .brand small { display: none; } }
+
+/* A2: breathing room under the earnings line */
+.earn { display: block; margin: 6px 0 18px; font-size: 14px; color: var(--text-secondary); }
+#view-deployer > .toolbar { margin-bottom: 4px !important; }
+
+/* A5: KPI tiles with a real hierarchy */
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.kpis .card { padding: 14px 16px; }
+.kpis .label { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
+.kpis .hero, .kpis .v {
+  font-size: 24px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15;
+  font-variant-numeric: tabular-nums; margin: 0;
+}
+.kpis .hero small, .kpis .v small { font-size: 12px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; letter-spacing: 0; }
+.kpis .sub { font-size: 11.5px; margin-top: 4px; line-height: 1.4; }
+@media (max-width: 1000px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* A6: the two charts side by side */
+.grid.two { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 900px) { .grid.two { grid-template-columns: 1fr; } }
+.charts .chart { height: 190px; }
+
+/* A7: lanes as a card grid, like the marketplace */
+.lanes { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.lane { display: flex; flex-direction: column; gap: 10px; }
+.lane-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.lane-top .avatar { width: 40px; height: 40px; }
+.lane-name { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.lane-name h3 { margin: 0; font-size: 15px; }
+.lane-id { font-size: 11.5px; color: var(--text-tertiary); }
+.lane .rate { font-size: 19px; margin: 0; }
+.lane-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.lane-meta span { font-size: 11.5px; color: var(--text-secondary); background: var(--bg-inset); border-radius: var(--radius-sm); padding: 2px 8px; }
+.lane-more summary { font-size: 12.5px; color: var(--accent); cursor: pointer; font-weight: 550; }
+.lane-more[open] summary { margin-bottom: 10px; }
+.lane-more .row { margin-top: 8px; }
+
+/* A8: registry and payments in compact, scrollable boxes */
+.tablewrap.compact { max-height: 380px; overflow: auto; padding: 0; }
+.tablewrap.compact table { font-size: 12px; }
+.tablewrap.compact th { position: sticky; top: 0; background: var(--bg-overlay); z-index: 1; }
+/* Column heads read as labels, not shouting */
+#view-deployer thead th { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 550; color: var(--text-secondary); }
+#view-deployer .tablewrap td { padding: 8px 12px; }
+#view-deployer .tablewrap thead th { padding: 8px 12px; }
+.tablewrap.compact th, .tablewrap.compact td { padding: 7px 10px; }
+.tablewrap.compact .sub { padding: 8px 10px; }
+#dep-payments .section, #dep-registry .section, #dep-apis .section { margin-top: 0; }
+#dep-payments .section + .section { margin-top: 18px; }
+
+/* B2: integrations as a row of tabs, not a tall column */
+.integ.row { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 14px; }
+.integ.row button {
+  width: auto; display: inline-flex; align-items: center; padding: 7px 14px;
+  border-radius: var(--radius-pill); font-size: 13px; font-weight: 550; text-align: center;
+}
+.integ.row button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pg { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); align-items: start; }
+
+/* B2: agent snippets in one box with tabs */
+.agents-note { margin-top: 16px; }
+.agent-code { margin-top: 12px; }
+.agent-code .tabs2 { margin-bottom: 8px; }
+.agent-code .hint { margin-bottom: 10px; }
+
+/* B3: activity should not stretch across the whole page */
+#user-activity .act-kpis, #act-list { max-width: 860px; }
+
+/* B4: service marks large enough to read at a glance */
+.svc .avatar { width: 48px; height: 48px; border-radius: 12px; }
+.svc .avatar.cat svg { width: 26px; height: 26px; stroke-width: 1.9; }
+
+/* A4: drop a file instead of typing a path */
+.dropzone {
+  display: grid; place-items: center; gap: 6px; text-align: center; cursor: pointer;
+  border: 1.5px dashed var(--border-active); border-radius: var(--radius-md);
+  padding: 26px 16px; background: var(--bg-inset); color: var(--text-secondary);
+  transition: border-color 120ms var(--ease-out), background-color 120ms var(--ease-out);
+}
+.dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-surface); }
+.dropzone svg { width: 28px; height: 28px; color: var(--accent); }
+.dropzone b { color: var(--text-primary); font-size: 14px; }
+.dropzone .hint { font-size: 12px; }
+.dropzone.busy { opacity: 0.7; pointer-events: none; }

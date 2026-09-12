@@ -9,7 +9,7 @@
 let MODE = "user";
 let USER_TAB = "market";
 const TAB_IDS = { market: "user-market", activity: "user-activity", play: "user-play" };
-const TAB_HASH = { market: "user", activity: "user/activity", play: "user/developers" };
+const TAB_HASH = { market: "user", activity: "user/activity", play: "user/playground" };
 
 function setMode(mode, push = true) {
   MODE = mode;
@@ -18,8 +18,8 @@ function setMode(mode, push = true) {
   $("mode-deployer").setAttribute("aria-pressed", String(mode === "deployer"));
   $("view-user").hidden = mode !== "user";
   $("view-deployer").hidden = mode !== "deployer";
-  if (mode === "deployer") { renderCharges(); renderHours(); refreshPublished(); renderEarnLine(); }
-  if (push) history.replaceState(null, "", `${location.pathname}${location.search}#${mode === "user" ? TAB_HASH[USER_TAB] : "deployer"}`);
+  if (mode === "deployer") { setDepTab(DEP_TAB, false); refreshPublished(); renderEarnLine(); }
+  if (push) history.replaceState(null, "", `${location.pathname}${location.search}#${mode === "user" ? TAB_HASH[USER_TAB] : depHash()}`);
   try { localStorage.setItem("mx402.mode", mode); } catch {}
 }
 
@@ -34,6 +34,23 @@ function setUserTab(tab, push = true) {
   if (MODE !== "user") setMode("user", false);
   if (push) history.replaceState(null, "", `${location.pathname}${location.search}#${TAB_HASH[tab]}`);
 }
+
+// ── deployer tabs ─────────────────────────────────────────────────────────
+let DEP_TAB = "overview";
+const DEP_TABS = ["overview", "apis", "payments", "registry"];
+const depHash = () => (DEP_TAB === "overview" ? "deployer" : `deployer/${DEP_TAB}`);
+function setDepTab(tab, push = true) {
+  DEP_TAB = DEP_TABS.includes(tab) ? tab : "overview";
+  for (const t of DEP_TABS) {
+    $(`dep-${t}`).hidden = t !== DEP_TAB;
+    $(`dtab-${t}`).setAttribute("aria-selected", String(t === DEP_TAB));
+  }
+  // charts size themselves from their container, which is 0 wide while hidden
+  if (DEP_TAB === "overview") { renderCharges(); renderHours(); }
+  if (MODE !== "deployer") return setMode("deployer", push);
+  if (push) history.replaceState(null, "", `${location.pathname}${location.search}#${depHash()}`);
+}
+for (const t of DEP_TABS) $(`dtab-${t}`).onclick = () => setDepTab(t);
 
 $("mode-user").onclick = () => setMode("user");
 $("mode-deployer").onclick = () => setMode("deployer");
@@ -297,6 +314,31 @@ $("ds-check").onclick = async () => {
   $("ds-next").onclick = () => { sellStep(2); renderDatasetPrices(); };
 };
 
+// Drop or choose a file: send the bytes to the hub, then run the same free
+// read the path box does. The hub keeps the file under data/uploads on this
+// machine; nothing goes anywhere else.
+async function uploadDataset(file) {
+  if (!file) return;
+  const zone = $("ds-drop"), title = $("ds-drop-title");
+  zone.classList.add("busy");
+  title.textContent = `Reading ${file.name}…`;
+  const r = await fetch(`/deploy/dataset/upload?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file })
+    .then((x) => x.json()).catch((e) => ({ ok: false, error: String(e) }));
+  zone.classList.remove("busy");
+  if (!r.ok) {
+    title.textContent = "Drop a file here, or choose one";
+    $("ds-preview").innerHTML = `<div class="notice bad"><b>Couldn't take that file</b><div>${esc(friendly(r.error))}</div></div>`;
+    return;
+  }
+  title.textContent = `${file.name} · ${(r.bytes / 1000).toFixed(1)} KB`;
+  $("ds-path").value = r.path;
+  $("ds-check").click();
+}
+$("ds-file").addEventListener("change", (e) => uploadDataset(e.target.files?.[0]));
+for (const ev of ["dragenter", "dragover"]) $("ds-drop").addEventListener(ev, (e) => { e.preventDefault(); $("ds-drop").classList.add("over"); });
+for (const ev of ["dragleave", "drop"]) $("ds-drop").addEventListener(ev, (e) => { e.preventDefault(); $("ds-drop").classList.remove("over"); });
+$("ds-drop").addEventListener("drop", (e) => uploadDataset(e.dataTransfer?.files?.[0]));
+
 /** What a page and the whole dataset would cost, at the current rate. */
 function renderDatasetPrices() {
   if (!DS) return;
@@ -318,7 +360,10 @@ function renderDatasetPrices() {
   const hash = location.hash.replace(/^#/, "");
   const qs = new URLSearchParams(location.search);
   renderPublishCli();
-  if (qs.get("stream") || qs.get("lane") || hash.startsWith("deployer")) return setMode("deployer", false);
+  if (qs.get("stream") || qs.get("lane") || hash.startsWith("deployer")) {
+    DEP_TAB = hash.split("/")[1] || (qs.get("stream") || qs.get("lane") ? "apis" : "overview");
+    return setMode("deployer", false);
+  }
   if (qs.get("rfq")) {
     setMode("user", false); setUserTab("market", false);
     const want = qs.get("rfq");

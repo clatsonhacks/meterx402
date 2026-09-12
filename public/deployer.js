@@ -262,35 +262,46 @@ function renderLanes() {
   const el = $("lanes");
   if (!lanes.length) { el.innerHTML = `<div class="card empty">No live lanes${S.owner ? " for this wallet" : ""} yet: run <span class="mono">npm run demo:offline</span></div>`; return; }
   el.innerHTML = lanes.map((l) => {
-    const sampleUrl = `${location.protocol}//${location.hostname}:${l.port}${l.sample ?? "/"}`;
-    return `<div class="card lane" data-lane="${esc(l.name)}">
-      <h3>${esc(l.name)}</h3>
+    // same mark the marketplace shows: the registry descriptor when there is one,
+    // else a best guess from the lane name
+    const listed = (typeof M !== "undefined" ? M.services ?? [] : []).find((s) => s.lane === l.name || s.descriptor?.service_id === l.name)?.descriptor;
+    const guess = /llm|chat|gpt/i.test(l.name) ? "text_generation" : /weather/i.test(l.name) ? "weather_forecast" : /ether|chain|scan/i.test(l.name) ? "blockchain_data" : /market|price/i.test(l.name) ? "market_data" : "data";
+    const d = { capabilities: listed?.capabilities?.length ? listed.capabilities : l.capabilities?.length ? l.capabilities : [guess], name: l.name };
+    return `<article class="card lane" data-lane="${esc(l.name)}">
+      <div class="lane-top">
+        <div class="lane-name">${typeof avatar === "function" ? avatar(d) : ""}
+          <div style="min-width:0"><h3>${esc(l.title ?? l.name)}</h3><div class="lane-id mono">${esc(l.name)} · :${l.port}</div></div></div>
+        ${l.tabs ? `<span class="badge">tabs</span>` : ""}
+      </div>
       <div class="rate">${esc(l.rateLabel)}</div>
-      <div class="kv">
-        <span>meter</span><span class="mono">${esc(l.meter)}</span>
-        <span>min / free</span><span>${fmt(l.min)} ${esc(l.currency)} · ${l.free} free ${esc(l.unit)}</span>
-        <span>seller cap</span><span>${l.maxUnits ?? "none"} ${l.maxUnits ? esc(l.unit) : ""} per call</span>
-        <span>endpoint</span><span class="mono">${esc(l.sampleMethod)} :${l.port}${esc(l.sample)}</span>
-        <span>payout</span><span class="mono">${esc(short(l.payTo))} · ${esc(l.network)}</span>
-        ${l.tabs ? `<span>tabs</span><span>allowance to <span class="mono">${esc(l.tabs.spender)}</span>, settles every ${esc(l.tabs.flushAt)} ${esc(l.currency)}</span>` : ""}
+      <div class="lane-meta">
+        <span class="mono">${esc(l.meter)}</span>
+        <span>cap ${l.maxUnits ?? "none"}${l.maxUnits ? ` ${esc(l.unit)}` : ""}</span>
+        <span>min ${fmt(l.min)} ${esc(l.currency)}</span>
       </div>
-      ${l.sampleMethod !== "GET" ? `<details><summary>request body</summary><textarea class="body">${esc(l.sampleBody ?? "")}</textarea></details>` : `<input type="text" class="path" value="${esc(l.sample ?? "/")}" style="width:100%;margin-bottom:6px">`}
-      <div class="row" style="margin-top:8px">
-        <label class="field">max ${esc(l.unit)}<input type="number" class="maxunits" min="1" placeholder="none"></label>
-        <label class="field">max ${esc(l.currency)} / call<input type="number" class="maxhbar" min="0" step="0.0001" placeholder="none"></label>
-        <button class="primary buy">Send test buyer</button>
-      </div>
-      ${l.tabs ? `<div class="tabline">
-        <span class="badge">tab</span>
-        <span class="label">stream it: allowance-backed, no per-call payment</span>
-        <input type="text" class="prompt" value="Explain metered x402 in 60 words" style="flex:1;min-width:180px">
-        <button class="primary stream">Stream</button>
-      </div>
-      <div class="stream-out" hidden></div>
-      <div class="meterbar" hidden><i></i></div>
-      <div class="tick" hidden><span class="t-units">0 ${esc(l.unit)}</span><span class="t-cost">0 ${esc(l.currency)}</span></div>` : ""}
+      <details class="lane-more"><summary>Details and test buyer</summary>
+        <div class="kv">
+          <span>endpoint</span><span class="mono">${esc(l.sampleMethod)} :${l.port}${esc(l.sample)}</span>
+          <span>payout</span><span class="mono">${esc(short(l.payTo))} · ${esc(l.network)}</span>
+          ${l.tabs ? `<span>tabs</span><span>allowance to <span class="mono">${esc(l.tabs.spender)}</span>, settles every ${esc(l.tabs.flushAt)} ${esc(l.currency)}</span>` : ""}
+        </div>
+        ${l.sampleMethod !== "GET" ? `<details><summary>request body</summary><textarea class="body">${esc(l.sampleBody ?? "")}</textarea></details>` : `<input type="text" class="path" value="${esc(l.sample ?? "/")}" style="width:100%">`}
+        <div class="row">
+          <label class="field">max ${esc(l.unit)}<input type="number" class="maxunits" min="1" placeholder="none"></label>
+          <label class="field">max ${esc(l.currency)} / call<input type="number" class="maxhbar" min="0" step="0.0001" placeholder="none"></label>
+          <button class="primary buy">Send test buyer</button>
+        </div>
+        ${l.tabs ? `<div class="tabline">
+          <span class="badge">tab</span>
+          <input type="text" class="prompt" value="Explain metered x402 in 60 words" style="flex:1;min-width:160px">
+          <button class="primary stream">Stream</button>
+        </div>
+        <div class="stream-out" hidden></div>
+        <div class="meterbar" hidden><i></i></div>
+        <div class="tick" hidden><span class="t-units">0 ${esc(l.unit)}</span><span class="t-cost">0 ${esc(l.currency)}</span></div>` : ""}
+      </details>
       <div class="result" hidden></div>
-    </div>`;
+    </article>`;
   }).join("");
   el.querySelectorAll(".lane").forEach((card) => {
     const lane = lanes.find((l) => l.name === card.dataset.lane);
