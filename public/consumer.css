@@ -206,7 +206,34 @@
 .ps-total .amt small { font-size: 15px; font-weight: 500; color: var(--text-secondary); }
 .ps-usd { text-align: right; color: var(--text-tertiary); font-size: 13px; }
 .ps-actions { display: flex; gap: 8px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
-.ps-fine { font-size: 12px; color: var(--text-tertiary); margin-top: 10px; }
+.ps-fine { font-size: 12px; color: var(--text-tertiary); margin-top: 8px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+/* the hold, draining: a deadline you can see rather than read */
+.ps-hold { height: 3px; border-radius: 2px; background: var(--border); overflow: hidden; margin-top: 12px; }
+.ps-hold i { display: block; height: 100%; width: 100%; background: var(--accent); transition: width 250ms linear; }
+.paysheet { animation: sheet-in 180ms var(--ease-out); }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* where the money actually went */
+.rc-split { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.sp-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); }
+.sp-bar i { display: block; height: 100%; }
+i.sp-seller { background: var(--success); }
+i.sp-fee { background: var(--warning); }
+.sp-keys { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; margin-top: 8px; color: var(--text-secondary); }
+.sp-keys span { display: inline-flex; align-items: center; gap: 6px; }
+.sp-keys i { width: 9px; height: 9px; border-radius: 2px; }
+.rc-head .rc-tick { animation: tick-in 260ms var(--ease-out) both; }
+@keyframes tick-in { from { transform: scale(0.4); opacity: 0; } }
+
+/* the live cost meter: the thesis of the project, moving */
+.meter { margin-top: 10px; }
+.m-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.m-units { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.m-cost { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.m-bar { height: 6px; border-radius: 3px; background: var(--bg-inset); overflow: hidden; margin: 6px 0 5px; }
+.m-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 140ms linear; }
+.m-bar i.capped { background: var(--warning); }
+.m-foot { font-size: 11.5px; color: var(--text-tertiary); }
 
 .receipt-card { border: 1px solid var(--success); border-radius: var(--radius-md); padding: 14px 16px; margin-top: 14px; background: var(--success-subtle); }
 .rc-head { display: flex; align-items: center; gap: 8px; font-size: 16px; flex-wrap: wrap; }

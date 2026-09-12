@@ -316,29 +316,52 @@ async function runTry() {
 
 function renderPaySheet(l, q, f, out, steps, warn) {
   const d = l.descriptor, amount = Number(q.amount);
-  out.innerHTML = `<div class="paysheet">
-      <div class="ps-head">Ready</div>
+  const span = Math.max(1000, q.expires_at - Date.now());   // for the hold bar
+  out.innerHTML = `<div class="paysheet" role="group" aria-label="Confirm payment">
+      <div class="ps-head">Ready to pay</div>
       <div class="ps-row"><span>${esc(titleOf(d))}</span><span>${esc(units(d.pricing, q.units))}</span></div>
       <div class="ps-total"><span>Total</span><span class="amt">${fmt(q.amount)} <small>${esc(q.currency)}</small></span></div>
       ${usdOf(amount) != null ? `<div class="ps-usd">≈ ${usdText(usdOf(amount))}</div>` : ""}
       ${warn.overReq ? `<div class="notice warn">This is above your ${hbar(LIM.perRequest)} per-request limit.</div>` : ""}
       ${warn.overSes ? `<div class="notice warn">This would take you past your ${hbar(LIM.session)} limit for this session.</div>` : ""}
       <div class="ps-actions"><button class="primary big" id="ps-pay">Pay ${fmt(q.amount)} ${esc(q.currency)}</button><button class="ghost" id="ps-no">Cancel</button></div>
+      <div class="ps-hold" aria-hidden="true"><i id="ps-bar"></i></div>
       <div class="ps-fine">You pay only for what was measured. Cancel and nothing is charged. <span id="ps-cd"></span></div>
     </div>`;
+  // The hold is a real deadline, so show it draining rather than as a number
+  // that people have to read and convert into urgency themselves.
   const cd = setInterval(() => {
-    const s = Math.max(0, Math.round((q.expires_at - Date.now()) / 1000));
-    const el = $("ps-cd");
+    const left = q.expires_at - Date.now();
+    const el = $("ps-cd"), bar = $("ps-bar");
     if (!el) return clearInterval(cd);
-    el.textContent = s ? `The price is held for ${s}s.` : "The price expired: ask again.";
-    if (!s) { clearInterval(cd); $("ps-pay").disabled = true; }
-  }, 500);
-  $("ps-no").onclick = () => {
-    clearInterval(cd);
+    const sec = Math.max(0, Math.round(left / 1000));
+    el.textContent = sec ? `Held for ${sec}s` : "The price expired: ask again.";
+    if (bar) bar.style.width = `${Math.max(0, Math.min(100, (left / span) * 100))}%`;
+    if (sec <= 0) { clearInterval(cd); $("ps-pay").disabled = true; done(); }
+  }, 250);
+
+  const done = () => { clearInterval(cd); removeEventListener("keydown", keys); };
+  const cancel = () => {
+    done();
     steps.push({ t: "You declined", d: "nothing was signed and nothing was paid; the hold expires on its own" });
     out.innerHTML = `<div class="notice"><b>Cancelled.</b> <span class="sub">Nothing was charged.</span></div>${whatHappened(steps)}`;
   };
-  $("ps-pay").onclick = () => { clearInterval(cd); payQuote(l, q, f, out, steps, q.amount, false); };
+  const pay = () => {
+    done();
+    const b = $("ps-pay");
+    if (b) { b.disabled = true; b.textContent = "Paying…"; }
+    payQuote(l, q, f, out, steps, q.amount, false);
+  };
+  // Enter pays, Escape cancels: the two things a checkout has to answer to.
+  const keys = (e) => {
+    if (M.tab !== "try") return;
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); pay(); }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancel(); }
+  };
+  addEventListener("keydown", keys);
+  $("ps-no").onclick = cancel;
+  $("ps-pay").onclick = pay;
+  $("ps-pay").focus({ preventScroll: true });
 }
 
 async function payQuote(l, q, f, out, steps, maxPrice, auto) {
@@ -368,6 +391,18 @@ function receiptHtml(l, rc, v, auto) {
   const d = l.descriptor, worst = l.price.worst_case_call, amount = Number(rc.amount);
   const saved = worst != null && worst > amount ? worst - amount : null;
   const verified = v ? v.bodyHash !== false && v.unitsMatch !== false : null;
+  // When the asset carries a custom fee, consensus splits this payment on the
+  // way through. Show the split: the seller did not receive what you paid.
+  const fee = d.payment.settlement.find((o) => o.currency === rc.currency)?.fee;
+  const cut = fee ? Number(fee.percent) : 0;
+  const split = fee && cut > 0 ? `<div class="rc-split">
+      <div class="sp-bar"><i class="sp-seller" style="width:${100 - cut}%"></i><i class="sp-fee" style="width:${cut}%"></i></div>
+      <div class="sp-keys">
+        <span><i class="sp-seller"></i>Seller ${fmt(amount * (100 - cut) / 100)} ${esc(rc.currency)}</span>
+        <span><i class="sp-fee"></i>Network fee ${fee.percent}% → ${esc(fee.collector)}</span>
+      </div>
+      <div class="sub">Assessed by consensus from the token's own fee schedule, not by MeterX402.</div>
+    </div>` : "";
   return `<div class="receipt-card">
     <div class="rc-head"><span class="rc-tick">✓</span><b>Paid ${fmt(rc.amount)} ${esc(rc.currency)}</b>${usdOf(amount) != null ? `<span class="usd">≈ ${usdText(usdOf(amount))}</span>` : ""}${auto ? `<span class="badge">auto-paid</span>` : ""}</div>
     <div class="rc-lines">
@@ -375,7 +410,7 @@ function receiptHtml(l, rc, v, auto) {
       ${verified != null ? `<span>Checked</span><span class="${verified ? "good" : "bad"}">${verified ? "You were charged for exactly what you received" : "What arrived did not match the price: a dispute was filed"}</span>` : ""}
       ${saved != null ? `<span>Versus flat</span><span>A flat price would have been ${hbar(worst)} — you saved <b>${hbar(saved)}</b></span>` : ""}
       ${rc.transaction_id ? `<span>Proof</span><span><a href="${esc(hashscanTx(rc.transaction_id))}" target="_blank" rel="noopener">View on HashScan ↗</a></span>` : `<span>Proof</span><span>On your prepaid tab; settles in a batch</span>`}
-    </div></div>`;
+    </div>${split}</div>`;
 }
 
 const resultHtml = (l, data, f) => {
@@ -394,25 +429,44 @@ function streamTry(l, req, f, out) {
   const d = l.descriptor, p = d.pricing;
   const perUnit = Number(p.rate) / p.per;
   const maxUnits = req.maxUnits ? Number(req.maxUnits) : Math.max(1, Math.floor(Number(LIM.perRequest) / perUnit));
-  out.innerHTML = `<div class="notice"><b>Streaming on a prepaid tab.</b> <span class="sub">You approve an allowance once; each answer is deducted as it's written, and stops at your limit.</span></div>
+  out.innerHTML = `<div class="notice"><b>Streaming on a prepaid tab.</b> <span class="sub">You approve an allowance once; each answer is deducted as it is written, and stops at your limit.</span></div>
     <div class="answer chat streaming"><p id="st-text"></p><span class="cursor"></span></div>
-    <div class="tick"><span id="st-u">measuring…</span><span id="st-c"></span></div>`;
+    <div class="meter" aria-live="off">
+      <div class="m-row"><span class="m-units" id="st-u">measuring…</span><span class="m-cost" id="st-cost">0 ${esc(d.pricing.currency)}</span></div>
+      <div class="m-bar"><i id="st-fill"></i></div>
+      <div class="m-row m-foot"><span id="st-c">opening a tab…</span><span>limit ${esc(units(p, maxUnits))}</span></div>
+    </div>`;
   const box = $("st-text");
   let text = "";
   const es = new EventSource(`/teststream?lane=${encodeURIComponent(d.name)}&prompt=${encodeURIComponent(req.prompt ?? "")}&maxUnits=${maxUnits}`);
-  es.addEventListener("open", (e) => { try { const o = JSON.parse(e.data); if (o.tab) $("st-c").textContent = `tab ${o.tab} · allowance ${o.allowance} HBAR`; } catch {} });
+  es.addEventListener("open", (e) => { try { const o = JSON.parse(e.data); if (o.tab) $("st-c").textContent = `tab ${o.tab} · allowance ${o.allowance} ${d.pricing.currency}`; } catch {} });
   es.addEventListener("chunk", (e) => {
     text += JSON.parse(e.data).text ?? "";
     box.innerHTML = prose(text);
+    // The whole point of metering, made visible: the number moves while the
+    // answer is still being written. ~4 characters per token is the usual
+    // rule of thumb, and the receipt replaces it with the real count.
     const approx = Math.ceil(text.length / 4);
-    $("st-u").textContent = `about ${units(p, approx)} so far · ~${hbar(priceFor(p, approx))}`;
+    const cost = priceFor(p, approx);
+    $("st-u").textContent = `~${units(p, approx)}`;
+    $("st-cost").textContent = `~${hbar(cost)}`;
+    $("st-fill").style.width = `${Math.min(100, (approx / maxUnits) * 100)}%`;
   });
-  es.addEventListener("cap", (e) => { const c = JSON.parse(e.data); text += `\n\n— stopped at your limit of ${c.cap} ${c.unit} —`; box.innerHTML = prose(text); });
+  es.addEventListener("cap", (e) => {
+    const c = JSON.parse(e.data);
+    text += `
+
+— stopped at your limit of ${c.cap} ${c.unit} —`;
+    box.innerHTML = prose(text);
+    $("st-fill").classList.add("capped");
+  });
   es.addEventListener("receipt", (e) => {
     const r = JSON.parse(e.data).receipt ?? {};
     out.querySelector(".streaming")?.classList.remove("streaming");
-    $("st-u").textContent = `${units(p, r.billable ?? 0)} used`;
-    $("st-c").innerHTML = `${hbar(r.amount)} deducted from your tab`;
+    $("st-u").textContent = units(p, r.billable ?? 0);
+    $("st-cost").textContent = hbar(r.amount);
+    $("st-fill").style.width = `${Math.min(100, ((r.billable ?? 0) / maxUnits) * 100)}%`;
+    $("st-c").innerHTML = `deducted from your tab · <b>exact</b>, not an estimate`;
     es.close();
     toast(`Streamed ${units(p, r.billable ?? 0)} · ${hbar(r.amount)}`);
     loadMine(); loadMarket();

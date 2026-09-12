@@ -151,8 +151,36 @@ function perPhrase(p) {
   const s = p.per === 1 ? `per ${base}` : `per ${Number(p.per).toLocaleString()} ${plural(base, p.per)}`;
   return /^tokens?$/.test(p.unit) && p.per >= 100 ? `${s} (~${Math.round(p.per * 0.75).toLocaleString()} words)` : s;
 }
-/** Exact price of n units: tinybar, always rounded up, never below the minimum. */
-const priceFor = (p, n) => Math.max(Number(p.min) || 0, Math.ceil((Number(n) * Number(p.rate) * 1e8) / p.per) / 1e8);
+/** A decimal string to atomic units, exactly. Number("0.0001") * 1e8 is
+ *  9999.999999999998 on some values, and 48 x that rounds UP a tinybar — so a
+ *  48-hour forecast quotes as 0.00480001 and the whole thing looks broken.
+ *  The server does this with rationals; the browser can do it with strings. */
+function toAtomicJs(dec, decimals = 8) {
+  const [wholeRaw = "0", fracRaw = ""] = String(dec ?? "0").trim().split(".");
+  const neg = wholeRaw.startsWith("-");
+  const whole = wholeRaw.replace(/^[+-]/, "") || "0";
+  const frac = (fracRaw + "0".repeat(decimals)).slice(0, decimals);
+  const dropped = fracRaw.slice(decimals);
+  let n = BigInt(whole + frac);
+  if (/[1-9]/.test(dropped)) n += 1n;         // never under-charge on truncation
+  return neg ? -n : n;
+}
+const fromAtomicJs = (atomic, decimals = 8) => {
+  const neg = atomic < 0n, a = (neg ? -atomic : atomic).toString().padStart(decimals + 1, "0");
+  const frac = a.slice(-decimals).replace(/0+$/, "");
+  return `${neg ? "-" : ""}${a.slice(0, -decimals)}${frac ? "." + frac : ""}`;
+};
+/** Exact price of n units: atomic units, always rounded up, never below the
+ *  minimum — the same rule the gateway applies, so the UI never disagrees
+ *  with the quote it is about to show. */
+function priceFor(p, n, decimals = 8) {
+  const rate = toAtomicJs(p.rate, decimals);
+  const per = BigInt(Math.max(1, Math.round(Number(p.per) || 1)));
+  const units = BigInt(Math.max(0, Math.ceil(Number(n) || 0)));
+  const total = (units * rate + per - 1n) / per;            // ceil-divide
+  const min = toAtomicJs(p.min ?? 0, decimals);
+  return Number(fromAtomicJs(total > min ? total : min, decimals));
+}
 
 // ── money ───────────────────────────────────────────────────────────────
 let FX = null; // USD per HBAR; null = unknown, and then we show HBAR only
