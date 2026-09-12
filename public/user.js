@@ -369,18 +369,32 @@ function refreshCostLine() {
   if (TRY.subscribed) {
     const sub = SUBS.get(l.service_id);
     $("costline").className = "costline covered";
-    $("costline").innerHTML = `<span class="cl-est">${icon("check")} Included in your subscription${u != null ? ` — ${esc(units(p, u))} of ${esc(units(p, sub?.includesUnits ?? 0))} this period` : ""}</span>
+    $("costline").innerHTML = `<span class="cl-est" id="cl-est">${icon("check")} Included in your subscription${u != null ? ` — ${esc(units(p, u))} of ${esc(units(p, sub?.includesUnits ?? 0))} this period` : ""}</span>
       <span class="cl-lim">no payment for this call</span>`;
     return;
   }
   const overs = est != null && est > Number(LIM.perRequest);
   $("costline").className = `costline${overs ? " over" : ""}`;
   $("costline").innerHTML = `
-    <span class="cl-est">${est == null
+    <span class="cl-est" id="cl-est">${est == null
       ? `You'll see the exact price before paying.`
       : `${exact ? "This request" : "Usually"}: <b>${money(est)}</b>${exact && u != null ? ` for ${esc(units(p, Math.min(u, p.max_units ?? u)))}` : ""}`}</span>
     <span class="cl-lim">${overs ? "⚠ above" : "Your limit:"} ${hbar(LIM.perRequest)} per request <button class="linky" id="cl-change">Change</button></span>`;
   $("cl-change").onclick = (e) => { e.preventDefault(); openWalletPop(); };
+
+  // A dataset can say how many rows a filter matches before anyone pays for
+  // them: /count carries no rows, so asking costs nothing. Started after the
+  // line is rendered, because it writes into the element rendered above, and
+  // tagged so a slow answer to an old query cannot overwrite a newer one.
+  if (recipe.count) {
+    const token = (TRY.countToken = Symbol());
+    recipe.count(l.descriptor, f, l.descriptor.endpoint).then((c) => {
+      if (TRY?.countToken !== token || !$("cl-est") || c?.matched == null) return;
+      $("cl-est").innerHTML = `<b>${Number(c.matched).toLocaleString()}</b> rows match` +
+        (c.of != null && c.of !== c.matched ? ` of ${Number(c.of).toLocaleString()}` : "") +
+        (est == null ? "" : ` · this one costs <b>${money(est)}</b>${u != null ? ` for ${esc(units(p, Math.min(u, p.max_units ?? u)))}` : ""}`);
+    }).catch(() => {});
+  }
 }
 
 const workingHtml = (msg) => `<div class="working"><span class="spin" aria-hidden="true"></span><div><b>${esc(msg)}</b><div class="sub">The service is running your request and measuring exactly what it uses. Nothing is charged yet.</div></div></div>`;

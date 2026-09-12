@@ -389,15 +389,20 @@ const server = createServer(async (req, res) => {
         const pageRows = Number(b.pageRows) || 50;
         const data = await serveDataset(ds, { defaultLimit: pageRows, maxLimit: maxRows });
         const title = String(b.title || ds.name.replace(/[-_]+/g, " ").replace(/\w/g, (c) => c.toUpperCase()));
+        // Cells by default, so picking fewer columns costs less; perRow opts out.
+        const byRow = !!b.perRow;
+        const cols = ds.columns.length;
         const svc = await wrap({
           upstream: data.url,
           sample: `/?limit=${pageRows}`,
           wallet,
-          meter: "rows:rows",
-          rate: String(b.rate || "0.0001"), per: 1, maxUnits: maxRows,
-          name: slug(String(b.name || ds.name)), title, unitLabel: "row",
-          description: String(b.description || `${ds.rows.length.toLocaleString()} rows of ${title.toLowerCase()}, queryable and priced per row returned.`),
+          meter: byRow ? "rows:rows" : "cells:rows",
+          rate: String(b.rate || (byRow ? "0.0001" : "0.00002")), per: 1,
+          maxUnits: byRow ? maxRows : maxRows * cols,
+          name: slug(String(b.name || ds.name)), title, unitLabel: byRow ? "row" : "cell",
+          description: String(b.description || `${ds.rows.length.toLocaleString()} rows and ${cols} columns of ${title.toLowerCase()}, queryable and priced per ${byRow ? "row" : "cell"} returned.`),
           capabilities: Array.isArray(b.capabilities) && b.capabilities.length ? b.capabilities : ["dataset"],
+          freePaths: ["/schema", "/count"],
           dataset: { rows: ds.rows.length, format: ds.format, columns: ds.columns.map((c) => ({ name: c.name, type: c.type })) },
           port: await freePort(), registry: SELF, facilitator: process.env.FACILITATOR_URL, quiet: true,
         });
@@ -481,6 +486,23 @@ const server = createServer(async (req, res) => {
       try {
         const r = await handle.call({ path: b.path || undefined, method: b.method || undefined, body: b.body || undefined, maxUnits: b.maxUnits ? Number(b.maxUnits) : undefined });
         return json(res, 200, { ok: r.ok, result: { status: r.status, paid: r.paid, data: trim(r.data), receipt: r.receipt, verification: r.verification } });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    // How many rows a filter matches, proxied so the page talks only to the
+    // hub (same origin) as it does for everything else. Free at both ends:
+    // /count carries no rows, so the gateway serves it without charging.
+    if (url.pathname === "/playground/count" && req.method === "GET") {
+      const id = url.searchParams.get("service_id") ?? "";
+      const entry = registry.get(id);
+      if (!entry) return json(res, 404, { ok: false, error: "no such service" });
+      const q = new URLSearchParams();
+      for (const k of ["where", "select"]) for (const v of url.searchParams.getAll(k)) q.append(k, v);
+      try {
+        const r = await fetch(`${entry.descriptor.endpoint}/count?${q.toString()}`, { signal: AbortSignal.timeout(4000) });
+        if (!r.ok) return json(res, 200, { ok: false, error: `count unavailable (${r.status})` });
+        return json(res, 200, { ok: true, ...(await r.json() as object) });
       } catch (e) {
         return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
       }
