@@ -1,0 +1,21 @@
+city,country,temperature,humidity,date,sunny
+New York,USA,22.5,65,2024-01-15,true
+London,UK,12.3,78,2024-01-15,false
+Tokyo,Japan,18.7,55,2024-01-15,true
+Sydney,Australia,28.4,70,2024-01-15,true
+Paris,France,15.2,72,2024-01-15,false
+Mumbai,India,32.1,85,2024-01-15,true
+Toronto,Canada,8.9,60,2024-01-15,false
+Berlin,Germany,10.5,68,2024-01-15,false
+Singapore,Singapore,30.2,88,2024-01-15,false
+Dubai,UAE,35.6,45,2024-01-15,true
+Mexico City,Mexico,20.3,50,2024-01-15,true
+Moscow,Russia,-5.2,75,2024-01-15,false
+Bangkok,Thailand,33.4,80,2024-01-15,true
+Istanbul,Turkey,14.8,70,2024-01-15,false
+Rio de Janeiro,Brazil,29.1,82,2024-01-15,true
+Cairo,Egypt,24.5,35,2024-01-15,true
+Seoul,South Korea,6.7,58,2024-01-15,false
+Buenos Aires,Argentina,26.8,65,2024-01-15,true
+Lagos,Nigeria,31.5,75,2024-01-15,false
+Rome,Italy,16.4,68,2024-01-15,true
