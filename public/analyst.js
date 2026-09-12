@@ -62,7 +62,7 @@
       const s = paid[k];
       const why = rep.skipped.find((x) => x.startsWith(`${k}:`));
       const detail = s
-        ? `${s.units ?? ""} ${esc(s.unit ?? "")} · ${s.amount == null ? "free" : `${fmt(s.amount)} ${esc(s.currency)}`}${s.tx ? txLink(s.tx, s.network) : ""}`
+        ? `${s.units ?? ""} ${esc(s.units === 1 ? String(s.unit ?? "").replace(/s$/, "") : s.unit ?? "")} · ${s.amount == null ? "free" : `${fmt(s.amount)} ${esc(s.currency)}`}${s.tx ? txLink(s.tx, s.network) : ""}`
         : esc(why ? why.slice(k.length + 1).trim() : "not needed for this question");
       return `<li class="${s ? "done" : "skip"}"><b>${t}</b><span>${detail}</span></li>`;
     }).join("");
@@ -73,6 +73,7 @@
     const total = Object.entries(rep.totals).map(([c, v]) => `${fmt(v)} ${esc(c)}`).join(" + ") || "nothing";
     return `<div class="an-answer">${prose(rep.answer)}</div>
       <div class="an-meta">${rep.writer === "llm" ? "Written by the LLM, only from the facts below" : "Facts only: no LLM service was available"} · planned by ${rep.planner === "llm" ? "the LLM" : "rules"} · paid ${total} in ${rep.spend.length} payment${rep.spend.length === 1 ? "" : "s"}</div>
+      ${rep.removed?.length ? `<div class="an-meta">Cut from the answer because the paid data doesn't contain the number: ${rep.removed.map((x) => `“${esc(x)}”`).join(", ")}</div>` : ""}
       <ol class="an-steps">${steps}</ol>
       <details class="adv" open><summary>Facts it rests on (computed in code from paid data)</summary>
         <ul class="an-facts">${rep.facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>

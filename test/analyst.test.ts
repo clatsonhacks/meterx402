@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractJson, factsFor, mergePlan, quoteRequest, rulePlan, summarizeQuote, type Plan } from "../src/graph/analyst.ts";
+import { extractJson, factsFor, groundProse, mergePlan, numbersIn, quoteRequest, rulePlan, summarizeQuote, type Plan } from "../src/graph/analyst.ts";
 import type { Pool } from "../src/graph/standard.ts";
 
 const pool = (over: Partial<Pool>): Pool => ({
@@ -38,6 +38,20 @@ test("mergePlan keeps what is on the menu and falls back for the rest", () => {
   const junk = mergePlan("not an object", rules);
   assert.deepEqual(junk.trade, rules.trade);
   assert.deepEqual(junk.pools.tokens, rules.pools.tokens);
+});
+
+test("numbersIn reads commas, decimals and magnitudes", () => {
+  assert.deepEqual(numbersIn("$109.70M TVL, 2,000 USDC, 25.81%, 1.5 billion, $250.0k"), [109.7e6, 2000, 25.81, 1.5e9, 250e3]);
+});
+
+test("groundProse keeps restated numbers and cuts invented ones", () => {
+  const facts = "Deepest: uniswap-v3/ethereum USDC-WETH 0.05% with $109.70M TVL.\nUniswap Trading API on ethereum: 2,000 USDC → 0.792315 WETH; implied WETH price $2,524.25.";
+  const prose = "**Swap price:**\nUsing the Uniswap Trading API, 2,000 USDC → 0.792315 WETH, implying a WETH price of $2,524.25 (≈ $5,048.50 per USDC). The pool holds 109.7 million in TVL across 3 chains. ETH trades near $1,585 today.";
+  const g = groundProse(prose, facts);
+  assert.match(g.text, /\*\*Swap price:\*\*\nUsing the Uniswap Trading API, 2,000 USDC → 0\.792315 WETH, implying a WETH price of \$2,524\.25\./);
+  assert.match(g.text, /109\.7 million in TVL across 3 chains/, "magnitude words and small counts are fine");
+  assert.doesNotMatch(g.text, /5,048|1,585/);
+  assert.deepEqual(g.dropped, ["(≈ $5,048.50 per USDC)", "ETH trades near $1,585 today."]);
 });
 
 test("extractJson finds the object inside prose and fences", () => {

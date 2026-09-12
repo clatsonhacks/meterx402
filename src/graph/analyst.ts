@@ -82,6 +82,8 @@ export interface AnalystReport {
   facts: string[];
   answer: string;
   writer: "llm" | "facts";
+  /** Parts of the model's answer cut because they stated numbers the paid data does not contain. */
+  removed: string[];
   spend: Spend[];
   totals: Record<string, string>;
   skipped: string[];
@@ -223,6 +225,36 @@ export function factsFor(plan: Plan, pools: Pool[], quote: QuoteSummary | null, 
 
 const fmtNum = (n: number) => (Math.abs(n) >= 1000 ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : Number(n.toPrecision(6)).toString());
 
+// ── grounding ─────────────────────────────────────────────────────────────
+
+const MULT: Record<string, number> = { k: 1e3, thousand: 1e3, m: 1e6, million: 1e6, b: 1e9, billion: 1e9 };
+
+/** Every number written in a text, with k/M/B and thousand/million/billion applied. */
+export function numbersIn(text: string): number[] {
+  return [...text.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(thousand|million|billion|k|m|b)?(?![a-z])/gi)]
+    .map((m) => Number(m[1].replace(/,/g, "")) * (MULT[m[2]?.toLowerCase() ?? ""] ?? 1))
+    .filter((v) => Number.isFinite(v));
+}
+
+/** The model may restate numbers it was handed, never bring its own. An aside
+ *  in brackets with an unknown number is cut; a sentence with one is dropped.
+ *  Small whole numbers ("3 chains", "24h", "v3") are always allowed. */
+export function groundProse(text: string, sources: string): { text: string; dropped: string[] } {
+  const known = numbersIn(sources);
+  const ok = (v: number) => (Number.isInteger(v) && v <= 31) || known.some((k) => k === v || (k !== 0 && Math.abs(k - v) / Math.abs(k) < 0.02));
+  const grounded = (s: string) => numbersIn(s).every(ok);
+  const dropped: string[] = [];
+  const lines = text.split(/(\n+)/).map((line) => {
+    if (/^\n+$/.test(line)) return line;
+    const cleaned = line.replace(/\s*\([^()]*\)/g, (aside) => (grounded(aside) ? aside : (dropped.push(aside.trim()), "")));
+    return cleaned
+      .split(/(?<=[.!?])\s+/)
+      .filter((sentence) => (grounded(sentence) ? true : (dropped.push(sentence.trim()), false)))
+      .join(" ");
+  });
+  return { text: lines.join("").replace(/\n{3,}/g, "\n\n").trim(), dropped };
+}
+
 // ── quoting ───────────────────────────────────────────────────────────────
 
 /** The trade as a Uniswap Trading API /quote body, on the best chain the pools found. */
@@ -361,11 +393,15 @@ export async function analyze(question: string, opts: AnalystOptions): Promise<A
     ? await chat("answer", "You are a concise DeFi analyst. Use ONLY the facts and rows given. Never compute, convert or estimate a number that is not written in them: no USD conversions of your own, no guesses about slippage or prices. Name pools as protocol/chain pair fee. Give a direct answer, one recommendation and one risk, in under 140 words. No markdown tables.", `Question: ${q}\n\nFacts:\n- ${facts.join("\n- ")}\n\nRows (protocol,chain,pair,fee,tvl,vol24h,apr):\n${table}`, 500)
     : null;
 
+  // the prompt asks for no invented numbers; this makes sure of it
+  const grounded = prose ? groundProse(prose, `${facts.join("\n")}\n${table}`) : null;
+  const answer = grounded?.text.trim() ? grounded.text : null;
+
   const totals: Record<string, number> = {};
   for (const s of spend) if (s.amount && s.currency) totals[s.currency] = (totals[s.currency] ?? 0) + Number(s.amount);
   return {
     question: q, planner, plan, pools, sources, quote, facts,
-    answer: prose ?? facts.join(" "), writer: prose ? "llm" : "facts",
+    answer: answer ?? facts.join(" "), writer: answer ? "llm" : "facts", removed: grounded?.dropped ?? [],
     spend, skipped,
     totals: Object.fromEntries(Object.entries(totals).map(([c, v]) => [c, String(Number(v.toFixed(8)))])),
   };
@@ -382,6 +418,7 @@ export function renderReport(r: AnalystReport): string {
     ...r.spend.map((s) => `  ${s.step.padEnd(7)} ${s.service.padEnd(14)} ${s.units ?? "-"} ${s.unit ?? ""} → ${s.amount ?? "free"} ${s.currency ?? ""}${s.tx ? `  tx ${s.tx}` : ""}`),
     `  total: ${Object.entries(r.totals).map(([c, v]) => `${v} ${c}`).join(", ") || "nothing"}`,
   ];
+  if (r.removed.length) lines.push("", "Cut from the answer (numbers not in the paid data):", ...r.removed.map((s) => `  - ${s}`));
   if (r.skipped.length) lines.push("", "Skipped:", ...r.skipped.map((s) => `  - ${s}`));
   return lines.join("\n");
 }
