@@ -55,6 +55,14 @@ export const ServiceDescriptor = z.object({
   endpoint: z.string().url(),          // the payment-enabled base URL buyers call
   sample: z.object({ method: z.string(), path: z.string(), body: z.string().optional() }).optional(),
   capabilities: z.array(z.string().min(1)).min(1),
+  /** Present when the service sells a dataset rather than proxying an API:
+   *  what a buyer is browsing before they buy any of it. */
+  dataset: z.object({
+    rows: z.number().int().nonnegative(),
+    format: z.string(),
+    columns: z.array(z.object({ name: z.string(), type: z.string() })).min(1),
+    schema_url: z.string().url().optional(),
+  }).optional(),
   pricing: z.object({
     meter: z.string(),                 // tokens | rows:<path> | bytes | ms | json:<path> | request
     unit: z.string(),

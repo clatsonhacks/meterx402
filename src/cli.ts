@@ -347,6 +347,7 @@ ${bold("What buyers would pay")}`);
     unitLabel: "row",
     description: flag("description") ?? `${ds.rows.length.toLocaleString()} rows of ${title.toLowerCase()}, queryable and priced per row returned.`,
     capabilities: (flag("capability") ? [flag("capability")!] : ["dataset"]),
+    dataset: { rows: ds.rows.length, format: ds.format, columns: ds.columns.map((c) => ({ name: c.name, type: c.type })) },
     port: Number(flag("port", "0")) || undefined,
     registry,
     quiet: true,

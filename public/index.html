@@ -178,7 +178,20 @@
         <button class="primary" id="sell-open" aria-expanded="false" aria-controls="sell-body"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Sell an API</button>
       </div>
       <div id="sell-body" hidden>
+        <div class="sellkind" role="radiogroup" aria-label="What are you selling">
+          <button type="button" id="kind-api" role="radio" aria-checked="true">An API<span>proxy a URL you already run</span></button>
+          <button type="button" id="kind-data" role="radio" aria-checked="false">A dataset<span>a CSV or JSON file on this machine</span></button>
+        </div>
+
         <ol class="stepper" id="stepper"><li data-s="1">Connect</li><li data-s="2">Price</li><li data-s="3">Get paid</li></ol>
+
+        <div class="sstep" id="ss-data" hidden>
+          <div class="form">
+            <label>Path to the file on this machine<input type="text" id="ds-path" placeholder="C:\data\weather-2026.csv  ·  .csv, .json, .jsonl"></label>
+            <div class="runbar"><button class="primary" id="ds-check">Read it (free)</button><span class="label">Nothing leaves this machine. Only rows a buyer pays for are ever served.</span></div>
+            <div id="ds-preview"></div>
+          </div>
+        </div>
 
         <div class="sstep" id="ss-1">
           <div class="form">
