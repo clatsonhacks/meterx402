@@ -188,7 +188,7 @@ $("pub-go").onclick = async () => {
   $("pub-result").innerHTML = `<div class="working"><span class="spin"></span><div><b>Publishing…</b><div class="sub">Starting your payment endpoint and registering it.</div></div></div>`;
   const r = await fetch("/deploy/publish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(p) }).then((x) => x.json()).catch((e) => ({ ok: false, error: String(e) }));
   $("pub-go").disabled = false;
-  if (!r.ok) return ($("pub-result").innerHTML = `<div class="notice bad"><b>Couldn't publish</b><div>${esc(r.error)}</div></div>`);
+  if (!r.ok) return ($("pub-result").innerHTML = `<div class="notice bad"><b>Couldn't publish</b><div>${esc(friendly(r.error))}</div></div>`);
   const d = r.descriptor;
   $("pub-result").innerHTML = "";
   for (const s of [1, 2, 3]) $(`ss-${s}`).hidden = true;

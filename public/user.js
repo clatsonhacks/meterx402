@@ -14,13 +14,29 @@ const COMP_LABEL = { execution: "Delivered what was paid for", response_success:
 
 async function loadMarket() {
   try {
-    const { services } = await fetch("/registry/services?live=all").then((r) => r.json());
-    M.services = services;
+    // Validate before trusting: a hub that answers 503 with an error object
+    // still parses as JSON, and destructuring it produces a confusing crash
+    // three frames later instead of an honest "the hub is down".
+    const res = await fetch("/registry/services?live=all");
+    if (!res.ok) throw new Error(`hub_${res.status}`);
+    const body = await res.json();
+    if (!Array.isArray(body?.services)) throw new Error("bad_response");
+    M.services = body.services;
     M.loaded = true;
+    setNet(true);
     renderExplore();
     if (typeof refreshPlaygroundServices === "function") refreshPlaygroundServices();
     if (M.open) renderSheet(false);
-  } catch {}
+  } catch (e) {
+    setNet(false, friendly(e));
+    if (!M.services.length) {
+      M.loaded = true;                       // stop the skeletons spinning forever
+      $("mkt-grid").innerHTML = `<div class="card empty-state" style="grid-column:1/-1"><b>Can't reach the hub.</b>
+        <div class="sub" style="margin:6px 0 12px">It may still be starting, or it may have stopped. Nothing was charged.</div>
+        <button class="ghost" id="mkt-retry">Try again</button></div>`;
+      $("mkt-retry").onclick = loadMarket;
+    }
+  }
 }
 
 // ── Explore ─────────────────────────────────────────────────────────────
@@ -261,14 +277,17 @@ function refreshCostLine() {
 }
 
 const workingHtml = (msg) => `<div class="working"><span class="spin" aria-hidden="true"></span><div><b>${esc(msg)}</b><div class="sub">The service is running your request and measuring exactly what it uses. Nothing is charged yet.</div></div></div>`;
-const errorHtml = (title, detail) => `<div class="notice bad"><b>${esc(title)}</b><div>${esc(detail ?? "")}</div><div class="sub">Nothing was charged.</div></div>`;
+const errorHtml = (title, detail, retry = true) => `<div class="notice bad"><b>${esc(title)}</b><div>${esc(friendly(detail))}</div>
+  <div class="sub">Nothing was charged.</div>${retry ? `<div class="runbar"><button class="ghost" data-retry="1">Try again</button></div>` : ""}</div>`;
+/** Wire any "Try again" the last render produced. */
+function bindRetry(root, fn) { root.querySelector("[data-retry]")?.addEventListener("click", fn); }
 
 async function runTry() {
   const { l, recipe } = TRY, d = l.descriptor;
   const { req, f } = currentRequest();
   const out = $("t-out");
   if (req.stream) return streamTry(l, req, f, out);
-  if (!W.ok) { out.innerHTML = errorHtml("No wallet set up", "Add BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY to .env, or run the offline demo."); return; }
+  if (!W.ok) { out.innerHTML = errorHtml("No wallet set up", "Add BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY to .env, or run the offline demo.", false); return; }
 
   $("t-go").disabled = true;
   out.innerHTML = workingHtml(recipe.working);
@@ -279,7 +298,7 @@ async function runTry() {
   }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e) }));
   $("t-go").disabled = false;
 
-  if (!qr.ok) { out.innerHTML = errorHtml("That didn't work", qr.error); return; }
+  if (!qr.ok) { out.innerHTML = errorHtml("That didn't work", qr.error); bindRetry(out, runTry); return; }
   if (qr.free) { out.innerHTML = `<div class="notice ok"><b>Free</b><div>Nothing billable was used, so there was nothing to pay.</div></div>${resultHtml(l, qr.result?.data, f)}`; return; }
 
   const q = qr.quote, amount = Number(q.amount);
@@ -332,7 +351,8 @@ async function payQuote(l, q, f, out, steps, maxPrice, auto) {
 
   if (!pr.ok || !pr.result?.paid) {
     steps.push({ t: "Payment refused", d: esc(pr.error ?? `HTTP ${pr.result?.status}`), bad: true });
-    out.innerHTML = errorHtml(pr.refused ? "Refused before signing" : "Payment didn't go through", pr.error) + whatHappened(steps);
+    out.innerHTML = errorHtml(pr.refused ? "Refused before signing" : "Payment didn't go through", pr.error, !pr.refused) + whatHappened(steps);
+    bindRetry(out, runTry);
     return;
   }
   const rc = pr.result.receipt, v = pr.result.verification;
@@ -397,12 +417,16 @@ function streamTry(l, req, f, out) {
     toast(`Streamed ${units(p, r.billable ?? 0)} · ${hbar(r.amount)}`);
     loadMine(); loadMarket();
   });
-  es.addEventListener("error", (e) => { let m = "the stream stopped"; try { m = JSON.parse(e.data).error ?? m; } catch {} out.innerHTML = errorHtml("Streaming failed", m); es.close(); });
+  es.addEventListener("error", (e) => {
+    let m = "the stream stopped"; try { m = JSON.parse(e.data).error ?? m; } catch {}
+    out.innerHTML = errorHtml("Streaming stopped", m); bindRetry(out, runTry); es.close();
+  });
   es.onerror = () => es.close();
 }
 
 // ── Activity ────────────────────────────────────────────────────────────
 function renderActivity() {
+  if (!W.ok) { $("act-list").innerHTML = `<div class="empty-state">No wallet, so nothing to show yet.</div>`; $("act-kpis").innerHTML = ""; return; }
   const listing = (id) => M.services.find((l) => l.service_id === id);
   const spent = totalSpent();
   const saved = MY.reduce((a, r) => { const w = listing(r.service_id)?.price.worst_case_call; return a + (w != null && w > Number(r.amount) ? w - Number(r.amount) : 0); }, 0);

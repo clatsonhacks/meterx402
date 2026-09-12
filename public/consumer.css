@@ -5,6 +5,13 @@
 /* ── mode visibility ─────────────────────────────────────────────────── */
 .mode-user .dep-only, .mode-deployer .user-only { display: none !important; }
 
+/* ── the hub went away ───────────────────────────────────────────────── */
+.netbar {
+  position: sticky; top: 56px; z-index: 19; display: flex; gap: 10px; align-items: center; justify-content: center;
+  padding: 8px 16px; font-size: 13px; background: var(--warning-subtle); color: var(--warning-ink);
+  border-bottom: 1px solid var(--border);
+}
+
 /* ── icons ───────────────────────────────────────────────────────────────
    app.css sets svg { display:block; max-width:100% }, which with no width
    attribute means "as wide as the parent will allow" — so every icon needs a

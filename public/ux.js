@@ -59,6 +59,66 @@ function icon(name, cls = "") {
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 }
 
+// ── saying what went wrong ──────────────────────────────────────────────
+// The payment layer speaks in codes (facilitator_unavailable, tab_exhausted,
+// pay_to_not_associated). Those are right for logs and wrong for a person
+// standing in front of the screen, and "TypeError: Failed to fetch" is right
+// for nobody. Every message a human can see goes through here first.
+const ERRORS = {
+  facilitator_unavailable: "The payment network isn't answering right now. Nothing was charged.",
+  quote_failed: "This service couldn't work out a price for that request.",
+  rate_limited: "Too many requests in a row. Wait a moment and try again.",
+  too_many_unpaid_quotes: "There are unpaid quotes outstanding. Pay one or let them expire first.",
+  response_too_large_to_meter: "The response was too big to meter. Ask for less in one go.",
+  unknown_or_expired_quote: "That price expired. Ask again to get a fresh one.",
+  expired: "That price expired. Ask again to get a fresh one.",
+  tab_exhausted: "The prepaid tab has run out. Top it up to keep going.",
+  tab_frozen: "The prepaid tab was frozen, usually because the allowance was revoked.",
+  unknown_or_expired_tab: "That tab is no longer open.",
+  unknown_or_expired_subscription: "That subscription is no longer valid.",
+  subscription_period_exhausted: "This period's included usage is spent, so this call is priced normally.",
+  no_allowance: "No allowance was found on the ledger for this tab.",
+  bad_signature: "The signature didn't match the account.",
+  bad_response: "The hub answered with something unexpected.",
+  challenge_expired: "That took too long. Start again.",
+  pay_to_not_associated: "The seller's account isn't set up to receive this token yet.",
+  insufficient_balance: "Not enough balance in the wallet for this payment.",
+  insufficient_funds: "Not enough balance in the wallet for this payment.",
+  payment_does_not_match_quote: "The payment didn't match the quote, so it was refused before settling.",
+  human_verification_required: "This service only answers verified humans.",
+  subscriptions_not_enabled: "This service doesn't sell subscriptions.",
+  tabs_not_enabled: "This service doesn't offer prepaid tabs.",
+};
+function friendly(err) {
+  const raw = String(err?.message ?? err ?? "").trim();
+  if (!raw) return "Something went wrong.";
+  for (const [code, text] of Object.entries(ERRORS)) if (raw === code || raw.includes(code)) return text;
+  if (/failed to fetch|networkerror|load failed/i.test(raw)) return "Can't reach the hub. Is it still running?";
+  if (/^hub_5\d\d$/.test(raw)) return "The hub is up but not answering properly yet.";
+  if (/^hub_\d+$/.test(raw)) return `The hub refused that request (${raw.slice(4)}).`;
+  // an internal JS error is a bug, not a message: never show its text
+  if (/is not (iterable|a function|defined)|undefined|null|cannot read/i.test(raw)) {
+    console.error("mx402:", raw);
+    return "Something went wrong on this page.";
+  }
+  if (/^\s*5\d\d/.test(raw) || /50[0-9]/.test(raw)) return "The service is having trouble. Nothing was charged.";
+  // a sentence from the SDK (budget refusals and the like) is already readable
+  return raw.length > 160 ? raw.slice(0, 157) + "…" : raw;
+}
+
+// ── is the hub still there? ─────────────────────────────────────────────
+// Every view polls. Without this, a hub that dies mid-demo looks exactly like
+// a hub with nothing to say: stale cards, no explanation.
+let netDown = false;
+function setNet(ok, detail = "") {
+  if (ok === !netDown) return;               // no change
+  netDown = !ok;
+  const bar = $("netbar");
+  bar.hidden = ok;
+  if (!ok) bar.innerHTML = `<span>${esc(detail || "Can't reach the hub.")}</span><button class="linky" id="net-retry">Retry now</button>`;
+  if (!ok) $("net-retry").onclick = () => { loadMarket?.(); loadMe?.(); };
+}
+
 // ── names, categories, units ────────────────────────────────────────────
 const CATS = {
   text_generation: { label: "AI Chat", icon: "message", hue: 265 },
@@ -156,7 +216,8 @@ const sessionSpent = () => MY.filter((r) => r.settled_at >= SESSION_START).reduc
 const totalSpent = () => MY.reduce((a, r) => a + Number(r.amount), 0);
 
 async function loadMe() {
-  try { W = await fetch("/me").then((r) => r.json()); } catch { W = { ok: false }; }
+  try { W = await fetch("/me").then((r) => r.json()); setNet(true); }
+  catch (e) { W = { ok: false }; setNet(false, friendly(e)); }
   renderWalletBtn();
   if (W.ok) await loadMine();
 }
