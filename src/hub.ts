@@ -361,6 +361,53 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
       }
     }
+    // ── selling a dataset from the Deployer view ────────────────────────
+    // The file stays on this machine; the hub only reads it to describe it,
+    // and later to answer the rows a buyer has paid for.
+    if (req.method === "POST" && url.pathname === "/deploy/dataset/check") {
+      const b = await readBody(req);
+      try {
+        const { loadDataset } = await import("./data.ts");
+        const ds = loadDataset(String(b.path ?? ""));
+        return json(res, 200, {
+          ok: true, name: ds.name, format: ds.format, bytes: ds.bytes,
+          rows: ds.rows.length, columns: ds.columns, sample: ds.rows.slice(0, 5),
+        });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
+    if (req.method === "POST" && url.pathname === "/deploy/dataset/publish") {
+      const b = await readBody(req);
+      const wallet = String(b.wallet || process.env.WALLET || "");
+      if (!wallet) return json(res, 400, { ok: false, error: "a payout wallet is required (or set WALLET in .env)" });
+      try {
+        const { loadDataset, serveDataset } = await import("./data.ts");
+        const { wrap } = await import("./sdk/seller.ts");
+        const ds = loadDataset(String(b.path ?? ""));
+        const maxRows = Number(b.maxRows) || 1000;
+        const pageRows = Number(b.pageRows) || 50;
+        const data = await serveDataset(ds, { defaultLimit: pageRows, maxLimit: maxRows });
+        const title = String(b.title || ds.name.replace(/[-_]+/g, " ").replace(/\w/g, (c) => c.toUpperCase()));
+        const svc = await wrap({
+          upstream: data.url,
+          sample: `/?limit=${pageRows}`,
+          wallet,
+          meter: "rows:rows",
+          rate: String(b.rate || "0.0001"), per: 1, maxUnits: maxRows,
+          name: slug(String(b.name || ds.name)), title, unitLabel: "row",
+          description: String(b.description || `${ds.rows.length.toLocaleString()} rows of ${title.toLowerCase()}, queryable and priced per row returned.`),
+          capabilities: Array.isArray(b.capabilities) && b.capabilities.length ? b.capabilities : ["dataset"],
+          dataset: { rows: ds.rows.length, format: ds.format, columns: ds.columns.map((c) => ({ name: c.name, type: c.type })) },
+          port: await freePort(), registry: SELF, facilitator: process.env.FACILITATOR_URL, quiet: true,
+        });
+        const closeBoth = async () => { await svc.close(); await data.close(); };
+        published.set(svc.descriptor.service_id, { url: svc.url, startedAt: Date.now(), close: closeBoth });
+        return json(res, 200, { ok: true, descriptor: svc.descriptor, rows: ds.rows.length });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: String((e as Error)?.message ?? e).split("\n")[0] });
+      }
+    }
     if (url.pathname === "/deploy/published" && req.method === "GET") {
       return json(res, 200, { services: [...published].map(([id, p]) => ({ service_id: id, url: p.url, startedAt: p.startedAt })) });
     }

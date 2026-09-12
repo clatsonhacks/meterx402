@@ -132,7 +132,7 @@ function cardHtml(l) {
       <div class="p-sub">${typical != null ? `Typical use ${hbar(typical)}${cents ? ` · ${cents}` : ""}` : worst != null ? `Never more than ${hbar(worst)} a use` : "priced by usage"}</div>
     </div>
     <div class="foot">
-      <div class="feats">${d.payment.streaming ? `<span class="feat">${icon("zap")} Streams live</span>` : ""}${l.reputation.stats.paid_calls ? `<span class="feat">${l.reputation.stats.paid_calls} paid use${l.reputation.stats.paid_calls === 1 ? "" : "s"}</span>` : ""}</div>
+      <div class="feats">${d.dataset ? `<span class="feat">${icon("package")} ${Number(d.dataset.rows).toLocaleString()} rows × ${d.dataset.columns.length} cols</span>` : ""}${d.payment.streaming ? `<span class="feat">${icon("zap")} Streams live</span>` : ""}${l.reputation.stats.paid_calls ? `<span class="feat">${l.reputation.stats.paid_calls} paid use${l.reputation.stats.paid_calls === 1 ? "" : "s"}</span>` : ""}</div>
       <div class="actions">${l.live ? `<button class="primary">Try it</button>` : `<button class="ghost" data-act="about">Details</button>`}</div>
     </div>
   </article>`;
@@ -211,6 +211,13 @@ function aboutHtml(l) {
 
     <h4>Recent uses</h4>
     ${recent ? `<ul class="recent">${recent}</ul>` : `<div class="sub">No paid uses yet.</div>`}
+
+    ${d.dataset ? `<h4>What is in it</h4>
+    <div class="ds-about">
+      <div class="ds-meta">${Number(d.dataset.rows).toLocaleString()} rows · ${d.dataset.columns.length} columns · ${esc(d.dataset.format.toUpperCase())}</div>
+      <div class="ds-cols static">${d.dataset.columns.map((c) => `<span class="dscol"><b>${esc(c.name)}</b><small>${esc(c.type)}</small></span>`).join("")}</div>
+      ${d.dataset.schema_url ? `<div class="sub">The <a href="${esc(d.dataset.schema_url)}" target="_blank" rel="noopener">schema and a sample</a> are free: they carry no rows, so there is nothing to charge for.</div>` : ""}
+    </div>` : ""}
 
     <h4>Identity</h4>
     ${d.uaid ? `<div class="uaid" id="uaid-box" data-uaid="${esc(d.uaid)}">

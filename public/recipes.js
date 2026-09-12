@@ -248,6 +248,70 @@ const RECIPES = [
   },
 ];
 
+/** A dataset: browse the columns, filter, and watch the price follow the rows.
+ *  The schema is free, so the form can be built from the real columns before
+ *  the buyer has paid for anything. */
+RECIPES.push({
+  id: "dataset",
+  cta: "Get the rows",
+  working: "Querying the dataset…",
+  match: (d) => !!d.dataset?.columns?.length,
+  form: (d) => {
+    const cols = d.dataset.columns;
+    const filterable = cols.slice(0, 24);
+    return `<div class="ds-meta">${Number(d.dataset.rows).toLocaleString()} rows · ${cols.length} columns · ${esc(d.dataset.format.toUpperCase())}</div>
+      <div class="big">Columns <span class="hint">all of them unless you pick</span></div>
+      <div class="ds-cols">${cols.map((c) => `<button type="button" class="dscol" data-col="${esc(c.name)}" aria-pressed="false" title="${esc(c.type)}">${esc(c.name)}<small>${esc(c.type)}</small></button>`).join("")}</div>
+      <div class="big">Filter</div>
+      <div class="ds-filter">
+        <select id="r-col"><option value="">no filter</option>${filterable.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("")}</select>
+        <select id="r-op">${[["eq", "is"], ["ne", "is not"], ["contains", "contains"], ["starts", "starts with"], ["gt", "&gt;"], ["gte", "≥"], ["lt", "&lt;"], ["lte", "≤"]].map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
+        <input type="text" id="r-val" placeholder="value">
+      </div>
+      <div class="big">How many rows?</div>
+      <div class="choices" id="r-n">${[10, 50, 100, 500].map((v, i) => `<button type="button" class="choice" data-n="${v}" aria-pressed="${i === 1}">${v}</button>`).join("")}</div>`;
+  },
+  bind: (root, onChange) => {
+    root.querySelectorAll(".dscol").forEach((b) => b.onclick = () => {
+      b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"));
+      onChange();
+    });
+    root.querySelector("#r-n").querySelectorAll(".choice").forEach((b) => b.onclick = () => {
+      root.querySelector("#r-n").querySelectorAll(".choice").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+      onChange();
+    });
+    ["r-col", "r-op", "r-val"].forEach((id) => root.querySelector(`#${id}`)?.addEventListener("input", onChange));
+  },
+  read: (root) => ({
+    select: [...root.querySelectorAll('.dscol[aria-pressed="true"]')].map((b) => b.dataset.col),
+    col: root.querySelector("#r-col")?.value ?? "",
+    op: root.querySelector("#r-op")?.value ?? "eq",
+    val: root.querySelector("#r-val")?.value ?? "",
+    n: Number(root.querySelector('#r-n .choice[aria-pressed="true"]')?.dataset.n ?? 50),
+  }),
+  build: (d, f) => {
+    const p = new URLSearchParams();
+    p.set("limit", String(f.n));
+    if (f.select.length) p.set("select", f.select.join(","));
+    if (f.col && f.val) p.set("where", `${f.col}:${f.op}:${f.val}`);
+    return { method: "GET", path: `/?${p.toString()}`, body: "" };
+  },
+  // You pay for rows returned, so a filter that matches less costs less —
+  // the estimate is a ceiling, and the quote is the truth.
+  estimateUnits: (d, f) => Math.min(f.n, d.pricing.max_units ?? f.n),
+  render: (data, { d }) => {
+    const o = asObject(data);
+    const rows = Array.isArray(o?.rows) ? o.rows : largestArray(o);
+    if (!Array.isArray(rows) || !rows.length) return `<div class="notice">No rows matched that filter. Nothing was charged for rows you did not get.</div>`;
+    const cols = [...new Set(rows.flatMap((r) => Object.keys(r ?? {})))].slice(0, 10);
+    const num = new Set(d.dataset?.columns?.filter((c) => c.type === "number").map((c) => c.name) ?? []);
+    return `${o?.total != null ? `<div class="ds-meta">${rows.length} of ${Number(o.total).toLocaleString()} matching rows</div>` : ""}
+      <div class="tablewrap"><table class="vtable ds-table"><thead><tr>${cols.map((c) => `<th class="${num.has(c) ? "num" : ""}">${esc(c)}</th>`).join("")}</tr></thead><tbody>
+        ${rows.slice(0, 200).map((r) => `<tr>${cols.map((c) => `<td class="${num.has(c) ? "num" : ""}">${esc(String(r?.[c] ?? ""))}</td>`).join("")}</tr>`).join("")}
+      </tbody></table></div>`;
+  },
+});
+
 /** Everything else: the service's own sample, editable, rendered generically. */
 const GENERIC = {
   id: "generic",

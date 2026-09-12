@@ -69,6 +69,10 @@ $("sell-open").onclick = () => {
 
 function sellStep(n) {
   for (const s of [1, 2, 3]) $(`ss-${s}`).hidden = s !== n;
+  // step one differs by kind: a URL to call, or a file to read
+  $("ss-data").hidden = !(n === 1 && SELL_KIND === "data");
+  if (n === 1 && SELL_KIND === "data") $("ss-1").hidden = true;
+  if (n === 2 && SELL_KIND === "data") renderDatasetPrices();
   $("ss-done").hidden = true;
   $("stepper").querySelectorAll("li").forEach((li) => {
     const s = Number(li.dataset.s);
@@ -182,6 +186,7 @@ function renderPreview() {
 
 // publish
 $("pub-go").onclick = async () => {
+  if (SELL_KIND === "data") return publishDataset();
   const p = publishPayload();
   if (!p.url) return ($("pub-result").innerHTML = `<div class="notice bad">Enter your API's URL first.</div>`);
   $("pub-go").disabled = true;
@@ -189,9 +194,16 @@ $("pub-go").onclick = async () => {
   const r = await fetch("/deploy/publish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(p) }).then((x) => x.json()).catch((e) => ({ ok: false, error: String(e) }));
   $("pub-go").disabled = false;
   if (!r.ok) return ($("pub-result").innerHTML = `<div class="notice bad"><b>Couldn't publish</b><div>${esc(friendly(r.error))}</div></div>`);
-  const d = r.descriptor;
+  showPublished(r.descriptor, { tabs: r.tabs });
+  toast(`Published ${esc(r.descriptor.title || r.descriptor.name)}`);
+  loadMarket(); refreshLanes(); refreshPublished();
+};
+
+/** The success screen, shared by both kinds of thing you can sell. */
+function showPublished(d, extra = {}) {
   $("pub-result").innerHTML = "";
   for (const s of [1, 2, 3]) $(`ss-${s}`).hidden = true;
+  $("ss-data").hidden = true;
   $("stepper").querySelectorAll("li").forEach((li) => (li.className = "done"));
   $("ss-done").hidden = false;
   $("ss-done").innerHTML = `<div class="done-ic">${icon("check")}</div>
@@ -199,15 +211,39 @@ $("pub-go").onclick = async () => {
     <p class="label">Buyers and AI agents can find it, get a price, and pay per use. Payments settle straight to ${esc(d.owner.account)}.</p>
     <div class="kv">
       <span>Price</span><span>${fmt(d.pricing.rate)} ${esc(d.pricing.currency)} ${esc(perPhrase(d.pricing))}</span>
+      ${extra.rows != null ? `<span>Holds</span><span>${Number(extra.rows).toLocaleString()} rows · the schema and a sample stay free</span>` : ""}
       <span>Endpoint</span><span class="mono">${esc(d.endpoint)}</span>
-      <span>Settles on</span><span>${d.payment.settlement.map((o) => o.schemes.join(" + ")).join("; ")}${r.tabs ? " (prepaid tabs on)" : ""}</span>
+      <span>Settles on</span><span>${d.payment.settlement.map((o) => o.schemes.join(" + ")).join("; ")}${extra.tabs ? " (prepaid tabs on)" : ""}</span>
     </div>
     <div class="runbar"><button class="primary" id="pub-see">See it in the marketplace</button><button class="ghost" id="pub-again">Sell another</button></div>`;
   $("pub-see").onclick = () => { setMode("user"); setUserTab("market"); openService(d.service_id, "try"); };
-  $("pub-again").onclick = () => { CHECK = null; ["pub-url", "pub-sample", "pub-body", "pub-title", "pub-desc", "pub-caps", "pub-rate", "pub-unitlabel"].forEach((id) => ($(id).value = "")); sellStep(1); };
-  toast(`Published ${esc(d.title || d.name)}`);
+  $("pub-again").onclick = () => {
+    CHECK = null; DS = null;
+    ["pub-url", "pub-sample", "pub-body", "pub-title", "pub-desc", "pub-caps", "pub-rate", "pub-unitlabel", "ds-path"].forEach((id) => ($(id).value = ""));
+    $("ds-preview").innerHTML = "";
+    sellStep(1);
+  };
+}
+
+async function publishDataset() {
+  if (!DS) return ($("pub-result").innerHTML = `<div class="notice bad">Read a file first.</div>`);
+  $("pub-go").disabled = true;
+  $("pub-result").innerHTML = `<div class="working"><span class="spin"></span><div><b>Publishing…</b><div class="sub">Serving the dataset behind a metered endpoint and registering it.</div></div></div>`;
+  const r = await fetch("/deploy/dataset/publish", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      path: $("ds-path").value.trim(), wallet: $("pub-wallet").value.trim(),
+      rate: $("pub-rate").value, title: $("pub-title").value.trim(),
+      name: $("pub-title").value.trim(), description: $("pub-desc").value.trim(),
+      capabilities: $("pub-caps").value.split(",").map((x) => x.trim()).filter(Boolean),
+    }),
+  }).then((x) => x.json()).catch((e) => ({ ok: false, error: String(e) }));
+  $("pub-go").disabled = false;
+  if (!r.ok) return ($("pub-result").innerHTML = `<div class="notice bad"><b>Couldn't publish</b><div>${esc(friendly(r.error))}</div></div>`);
+  showPublished(r.descriptor, { rows: r.rows });
+  toast(`Published ${esc(r.descriptor.title || r.descriptor.name)} · ${Number(r.rows).toLocaleString()} rows`);
   loadMarket(); refreshLanes(); refreshPublished();
-};
+}
 
 async function refreshPublished() {
   const { services } = await fetch("/deploy/published").then((r) => r.json()).catch(() => ({ services: [] }));
@@ -218,6 +254,63 @@ async function refreshPublished() {
     await fetch(`/deploy/published/${encodeURIComponent(b.dataset.stop)}`, { method: "DELETE" });
     refreshPublished(); loadMarket(); refreshLanes();
   });
+}
+
+// ── selling a dataset ───────────────────────────────────────────────────
+// The same three steps, but step one reads a file instead of calling a URL.
+// The file never leaves this machine: the hub reads it to describe it, and
+// afterwards serves only the rows a buyer has paid for.
+let SELL_KIND = "api";
+let DS = null;                                   // the last successful read
+
+function setSellKind(kind) {
+  SELL_KIND = kind;
+  $("kind-api").setAttribute("aria-checked", String(kind === "api"));
+  $("kind-data").setAttribute("aria-checked", String(kind === "data"));
+  sellStep(1);
+}
+$("kind-api").onclick = () => setSellKind("api");
+$("kind-data").onclick = () => setSellKind("data");
+
+$("ds-check").onclick = async () => {
+  const path = $("ds-path").value.trim();
+  const out = $("ds-preview");
+  if (!path) return (out.innerHTML = `<div class="notice bad">Enter the path to a .csv, .json or .jsonl file.</div>`);
+  $("ds-check").disabled = true;
+  out.innerHTML = `<div class="working"><span class="spin"></span><div><b>Reading the file…</b><div class="sub">Working out the columns and their types.</div></div></div>`;
+  const r = await fetch("/deploy/dataset/check", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path }),
+  }).then((x) => x.json()).catch((e) => ({ ok: false, error: String(e) }));
+  $("ds-check").disabled = false;
+  if (!r.ok) { out.innerHTML = `<div class="notice bad"><b>Couldn't read that file</b><div>${esc(friendly(r.error))}</div></div>`; DS = null; return; }
+  DS = r;
+  const cols = r.columns.map((c) => `<span class="dscol"><b>${esc(c.name)}</b><small>${esc(c.type)}</small></span>`).join("");
+  out.innerHTML = `<div class="notice ok"><b>${Number(r.rows).toLocaleString()} rows × ${r.columns.length} columns</b>
+      <div>${esc(r.format.toUpperCase())} · ${(r.bytes / 1000).toFixed(1)} KB. Buyers pay per row they actually receive; the schema and a sample stay free.</div></div>
+    <div class="ds-cols static" style="margin-top:10px">${cols}</div>
+    <div class="runbar"><button class="primary" id="ds-next">Set a price per row</button></div>`;
+  if (!$("pub-title").value) $("pub-title").value = r.name.replace(/[-_]+/g, " ").replace(/\w/g, (c) => c.toUpperCase());
+  if (!$("pub-caps").value) $("pub-caps").value = "dataset";
+  if (!$("pub-unitlabel").value) $("pub-unitlabel").value = "row";
+  if (!$("pub-rate").value) $("pub-rate").value = "0.0001";
+  $("pub-per").value = "1";
+  $("ds-next").onclick = () => { sellStep(2); renderDatasetPrices(); };
+};
+
+/** What a page and the whole dataset would cost, at the current rate. */
+function renderDatasetPrices() {
+  if (!DS) return;
+  const card = { rate: $("pub-rate").value || "0.0001", per: 1, min: "0" };
+  const label = $("pub-unitlabel").value.trim() || "row";
+  const row = (l, n) => `<tr><td>${esc(l)}</td><td class="num">${Number(n).toLocaleString()} ${esc(plural(label, n))}</td><td class="num"><b>${fmt(priceFor(card, n))}</b> HBAR</td></tr>`;
+  $("pub-prices").innerHTML = `<table class="vtable"><tbody>
+      ${row("a 50-row page", 50)}
+      ${row("a 500-row pull", Math.min(500, DS.rows))}
+      ${row("the whole dataset", DS.rows)}
+    </tbody></table>
+    <div class="sub">A buyer pays for the rows a query returns, so a narrow filter costs less than a wide one. The schema and a three-row sample are always free.</div>`;
+  const usd = typeof usdOf === "function" ? usdOf(Number(card.rate)) : null;
+  $("pub-rate-usd").textContent = usd != null ? `≈ ${usdText(usd)} per ${label}` : "";
 }
 
 // ── start where the URL says ────────────────────────────────────────────

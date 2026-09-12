@@ -73,6 +73,8 @@ export interface GatewayConfig {
   capabilities?: string[];     // what it does, e.g. weather_forecast (default: inferred)
   description?: string;
   title?: string;              // display name for people
+  /** Dataset metadata, when this gateway fronts a file rather than an API. */
+  dataset?: { rows: number; format: string; columns: { name: string; type: string }[] };
   unitLabel?: string;          // one unit in plain words, e.g. "forecast hour"
   type?: ServiceType;          // default: inferred from the meter and sample
   publicUrl?: string;          // where buyers reach it (default: http://localhost:<port>)
@@ -272,6 +274,7 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
     sample: { method: (cfg.sampleMethod ?? "GET").toUpperCase(), path: cfg.sample ?? "/", ...(cfg.sampleBody ? { body: cfg.sampleBody } : {}) },
     capabilities: agentCapabilities,
     ...(uaid ? { uaid } : {}),
+    ...(cfg.dataset ? { dataset: { ...cfg.dataset, schema_url: `${endpoint}/schema` } } : {}),
     pricing: {
       meter: meter.spec, unit: card.unit, ...(cfg.unitLabel ? { unit_label: cfg.unitLabel } : {}), rate: plainDecimal(card.rate), per: Number(card.per ?? 1),
       min: plainDecimal(card.min ?? 0), free: card.free ?? 0, max_units: card.maxUnits ?? null, currency: chain.currency,

@@ -5,6 +5,40 @@
 /* ── mode visibility ─────────────────────────────────────────────────── */
 .mode-user .dep-only, .mode-deployer .user-only { display: none !important; }
 
+/* ── what are you selling ────────────────────────────────────────────── */
+.sellkind { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0 4px; }
+.sellkind button {
+  font: inherit; text-align: left; background: var(--bg-overlay); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 10px 14px; cursor: pointer; color: var(--text-primary);
+  font-size: 13.5px; font-weight: 600; transition: border-color 120ms var(--ease-out), background-color 120ms var(--ease-out);
+}
+.sellkind button span { display: block; font-size: 12px; font-weight: 450; color: var(--text-tertiary); margin-top: 2px; }
+.sellkind button:hover { border-color: var(--border-active); }
+.sellkind button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-surface); color: var(--accent); }
+.sellkind button[aria-checked="true"] span { color: var(--accent); opacity: 0.8; }
+@media (max-width: 640px) { .sellkind { grid-template-columns: 1fr; } }
+
+/* ── datasets ────────────────────────────────────────────────────────── */
+.ds-meta { font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.ds-cols { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.dscol {
+  font: inherit; font-size: 12px; display: inline-flex; align-items: baseline; gap: 5px;
+  background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 4px 9px; cursor: pointer; color: var(--text-secondary);
+  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.dscol small { font-size: 10.5px; color: var(--text-tertiary); }
+.dscol:hover { border-color: var(--border-active); }
+.dscol[aria-pressed="true"] { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.dscol[aria-pressed="true"] small { color: var(--accent); opacity: 0.75; }
+.ds-cols.static .dscol { cursor: default; }
+.ds-filter { display: grid; grid-template-columns: 1.2fr 1fr 1.4fr; gap: 8px; }
+.ds-about { background: var(--bg-inset); border-radius: var(--radius-sm); padding: 12px; }
+.ds-table { font-size: 12px; }
+.ds-table th { position: sticky; top: 0; background: var(--bg-overlay); }
+.result-box .tablewrap { max-height: 420px; overflow: auto; }
+@media (max-width: 640px) { .ds-filter { grid-template-columns: 1fr; } }
+
 /* ── subscriptions ───────────────────────────────────────────────────── */
 .subcard { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px; background: var(--bg-inset); }
 .subcard.on { border-color: var(--success); background: var(--success-subtle); }
@@ -319,6 +353,7 @@
 /* ── try it ──────────────────────────────────────────────────────────── */
 .tryform { display: grid; gap: 8px; }
 .tryform .big { font-size: 13px; font-weight: 600; margin-top: 6px; }
+.big .hint, .check .hint { font-weight: 450; color: var(--text-tertiary); font-size: 12px; margin-left: 6px; }
 .tryform input[type=text], .tryform textarea, .tryform select { width: 100%; }
 .prompt { min-height: 74px; font-family: inherit; font-size: 14px; }
 .examples { display: flex; gap: 6px; flex-wrap: wrap; }

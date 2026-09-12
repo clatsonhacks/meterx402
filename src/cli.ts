@@ -32,6 +32,11 @@ ${bold("mx402")} — turn any API into an x402 API that charges for what each ca
       The one command to sell an API: detect its type, auth and meter, confirm the
       pricing, start the payment endpoint, and register it so agents can discover it.
 
+  ${bold("mx402 data <file.csv|.json|.jsonl>")} --wallet <account> [--rate 0.0001] [--title "Weather 2024"]
+      Sell a dataset you already have. It is served as a queryable API (filter,
+      sort, select, page) and priced per row a buyer actually receives. The
+      schema and a sample are always free, so buyers can see before they pay.
+
   ${bold("mx402 inspect <service-id | url>")} [--registry url]
       A service's descriptor, pricing, settlement options and reputation.
 
@@ -53,6 +58,7 @@ export async function cli(argv: string[]): Promise<void> {
   if (cmd === "--help-all") { const { GATEWAY_HELP } = await import("./gateway.ts"); console.log(GATEWAY_HELP); return; }
   if (cmd === "mcp") { await import("./mcp.ts"); return; } // the MCP server, over stdio
   if (cmd === "check") return check(argv.slice(1));
+  if (cmd === "data") return data(argv.slice(1));
   if (cmd === "publish") return publish(argv.slice(1));
   if (cmd === "inspect") return inspect(argv.slice(1));
   if (cmd === "wallet") return wallet(argv.slice(1));
@@ -282,6 +288,83 @@ async function publish(argv: string[]): Promise<void> {
   MCP               listed by the MeterX402 MCP server (list_services, call_service)
 ${dim("  Ctrl+C to stop selling.")}
 `);
+}
+
+
+// ── mx402 data ────────────────────────────────────────────────────────────
+// A dataset is rows, and rows is the meter this project counts best. So a file
+// becomes a queryable, metered API with the same machinery as any other
+// service: same descriptor, same registry, same receipts.
+
+async function data(argv: string[]): Promise<void> {
+  const { loadDataset, serveDataset } = await import("./data.ts");
+  const { HUB_URL } = await import("./events.ts");
+  const { wrap } = await import("./sdk/seller.ts");
+  const flag = (n: string, d?: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
+  const file = argv.find((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--")));
+  const ok = (s: string) => console.log(`${green("✓")} ${s}`);
+
+  if (!file) { console.error("usage: mx402 data <file.csv|.json|.jsonl> --wallet <account>"); process.exit(1); }
+  const wallet = flag("wallet") ?? flag("pay-to") ?? process.env.WALLET;
+  if (!wallet) { console.error("--wallet <your payout account> is required (payments settle there)"); process.exit(1); }
+
+  console.log(`
+${bold("mx402 data")} ${dim(file)}
+`);
+  let ds;
+  try { ds = loadDataset(file); }
+  catch (e) { console.log(`${red("✖")} ${String((e as Error)?.message ?? e)}`); process.exit(1); }
+
+  ok(`Read ${bold(ds.rows.length.toLocaleString())} rows × ${bold(String(ds.columns.length))} columns ${dim(`(${ds.format}, ${(ds.bytes / 1000).toFixed(1)} KB)`)}`);
+  const w = Math.min(22, Math.max(...ds.columns.map((c) => c.name.length)));
+  for (const c of ds.columns.slice(0, 12)) {
+    console.log(`  ${c.name.padEnd(w)} ${dim(c.type.padEnd(8))} ${dim(c.examples.map((e) => String(e)).join(", ").slice(0, 46))}`);
+  }
+  if (ds.columns.length > 12) console.log(dim(`  … and ${ds.columns.length - 12} more`));
+
+  const rate = flag("rate", "0.0001")!;
+  const perCall = Number(flag("limit", "50"));
+  const maxRows = Number(flag("max-rows", "1000"));
+  const price = (n: number) => priceOf(n, { rate, per: 1, min: "0" });
+  console.log(`
+${bold("What buyers would pay")}`);
+  console.log(`  a ${perCall}-row page      ${bold(price(perCall).padStart(12))} HBAR`);
+  console.log(`  the whole dataset  ${bold(price(ds.rows.length).padStart(12))} HBAR ${dim(`(${ds.rows.length.toLocaleString()} rows, over ${Math.ceil(ds.rows.length / maxRows)} calls)`)}`);
+  console.log(dim(`  the schema and a 3-row sample are free: zero rows metered, so nothing to pay`));
+
+  const data = await serveDataset(ds, { defaultLimit: perCall, maxLimit: maxRows });
+  const title = flag("title") ?? ds.name.replace(/[-_]+/g, " ").replace(/\w/g, (c) => c.toUpperCase());
+  const name = flag("name") ?? ds.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const registry = (flag("registry") ?? flag("hub") ?? HUB_URL).replace(/\/+$/, "");
+
+  const svc = await wrap({
+    upstream: data.url,
+    sample: `/?limit=${perCall}`,
+    wallet,
+    meter: "rows:rows",
+    rate, per: 1, min: flag("min", "0"), maxUnits: maxRows,
+    name, title,
+    unitLabel: "row",
+    description: flag("description") ?? `${ds.rows.length.toLocaleString()} rows of ${title.toLowerCase()}, queryable and priced per row returned.`,
+    capabilities: (flag("capability") ? [flag("capability")!] : ["dataset"]),
+    dataset: { rows: ds.rows.length, format: ds.format, columns: ds.columns.map((c) => ({ name: c.name, type: c.type })) },
+    port: Number(flag("port", "0")) || undefined,
+    registry,
+    quiet: true,
+  });
+
+  ok(`Serving ${bold(svc.url)} ${dim(`→ ${data.url}`)}`);
+  console.log(`
+${bold("Buyers call")}`);
+  console.log(`  ${dim("free  ")} curl ${svc.url}/schema`);
+  console.log(`  ${dim("paid  ")} curl '${svc.url}/?limit=10&where=${ds.columns[0]?.name}:contains:a&sort=${ds.columns[0]?.name}'`);
+  console.log(`
+${dim("Ctrl-C to stop serving. The dataset stays on this machine; only the rows a buyer pays for leave it.")}
+`);
+
+  const stop = async () => { await svc.close(); await data.close(); process.exit(0); };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
 }
 
 // ── mx402 inspect ─────────────────────────────────────────────────────────
