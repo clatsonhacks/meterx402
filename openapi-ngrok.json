@@ -1,0 +1,148 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MeterX402 Connector",
+    "version": "0.1.0",
+    "description": "Universal API connector for pay-per-use services on MeterX402"
+  },
+  "servers": [
+    {
+      "url": "https://nondisbursed-displeasureably-miles.ngrok-free.dev",
+      "description": "Public ngrok tunnel"
+    }
+  ],
+  "paths": {
+    "/services": {
+      "get": {
+        "summary": "List available services",
+        "description": "Browse pay-per-use services by capability, price, and reputation",
+        "operationId": "listServices",
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by capability (e.g., weather_forecast, text_generation, llm_inference)"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Search query"
+          },
+          {
+            "name": "maxPrice",
+            "in": "query",
+            "schema": { "type": "number" },
+            "description": "Maximum price filter"
+          },
+          {
+            "name": "minReputation",
+            "in": "query",
+            "schema": { "type": "number" },
+            "description": "Minimum reputation score (0-100)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of services",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "name": { "type": "string" },
+                          "description": { "type": "string" },
+                          "capabilities": { "type": "array", "items": { "type": "string" } },
+                          "price": { "type": "object" },
+                          "reputation": { "type": "number" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call": {
+      "post": {
+        "summary": "Call a service",
+        "description": "Call a pay-per-use service and pay for actual usage",
+        "operationId": "callService",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["service_id"],
+                "properties": {
+                  "service_id": {
+                    "type": "string",
+                    "description": "Service identifier from listServices"
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": ["GET", "POST"],
+                    "default": "GET"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "API path and query string"
+                  },
+                  "request_body": {
+                    "type": "string",
+                    "description": "Request body for POST (JSON string)"
+                  },
+                  "max_units": {
+                    "type": "number",
+                    "description": "Cap the work (e.g., max tokens)"
+                  },
+                  "max_price": {
+                    "type": "number",
+                    "description": "Maximum price in HBAR"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Service response with payment receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "type": "object" },
+                    "receipt": {
+                      "type": "object",
+                      "properties": {
+                        "amount": { "type": "string" },
+                        "currency": { "type": "string" },
+                        "units": { "type": "number" },
+                        "unit_type": { "type": "string" },
+                        "transaction_id": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
