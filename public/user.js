@@ -7,10 +7,19 @@
 // under "What happened". The Developers tab (playground.js) shows the same
 // lifecycle step by step, and reuses runLifecycle() from the bottom of this file.
 
+const SUBS = new Map();      // service_id → the subscription this browser opened
 const M = { services: [], loaded: false, q: "", cap: "all", sort: "best", rated: false, open: null, tab: "try", receipts: {} };
 const HUB = location.origin;
 const IFACE = { rest: "REST", graphql: "GraphQL", a2a: "A2A", mcp: "MCP", sdk: "SDK" };
 const COMP_LABEL = { execution: "Delivered what was paid for", response_success: "Answered successfully", latency: "Responds quickly", disputes: "No disputes", uptime: "Online when checked", payment_reliability: "Payments settle cleanly" };
+
+async function loadSubs() {
+  try {
+    const { subscriptions } = await fetch("/playground/subscriptions").then((r) => r.json());
+    SUBS.clear();
+    for (const s of subscriptions ?? []) SUBS.set(s.service_id, s);
+  } catch {}
+}
 
 async function loadMarket() {
   try {
@@ -257,7 +266,9 @@ function renderTry(body, l) {
     body.innerHTML = `<div class="notice bad"><b>This service is offline right now.</b><div>Nothing can be requested or charged. It may come back: the registry keeps checking.</div></div>${aboutHtml(l)}`;
     return;
   }
+  const terms = d.payment.subscription, sub = SUBS.get(d.service_id);
   body.innerHTML = `
+    ${sub ? subActiveHtml(d, sub) : terms ? subOfferHtml(d, terms) : ""}
     <div class="tryform" id="tf">${recipe.form(d, l)}</div>
     <details class="adv" id="t-adv"><summary>Advanced: the exact request</summary>
       <div class="form" style="margin-top:8px">
@@ -270,12 +281,54 @@ function renderTry(body, l) {
     <div class="costline" id="costline"></div>
     <div class="runbar"><button class="primary big" id="t-go">${esc(recipe.cta)}</button></div>
     <div id="t-out"></div>`;
-  TRY = { l, recipe, root: $("tf"), advTouched: false };
+  TRY = { l, recipe, root: $("tf"), advTouched: false, subscribed: !!sub };
+  $("sub-go")?.addEventListener("click", () => subscribe(l));
   recipe.bind($("tf"), () => { syncAdvanced(); refreshCostLine(); });
   ["a-method", "a-path", "a-body", "a-max"].forEach((id) => $(id).addEventListener("input", () => { TRY.advTouched = true; refreshCostLine(); }));
   syncAdvanced();
   refreshCostLine();
   $("t-go").onclick = runTry;
+}
+
+/** A period is a commitment, so say what it costs and what it buys. */
+function subOfferHtml(d, t) {
+  const every = t.period_sec >= 86400 ? `${Math.round(t.period_sec / 86400)} days` : t.period_sec >= 3600 ? `${Math.round(t.period_sec / 3600)} hours` : `${Math.round(t.period_sec / 60)} minutes`;
+  return `<div class="subcard">
+    <div class="s-top"><div><b>Or subscribe</b>
+      <div class="sub">${hbar(t.price)} every ${esc(every)}, with ${esc(units(d.pricing, t.includes_units ?? 0))} included. You pre-sign the payments now as scheduled transfers; Hedera executes them on time, and you can cancel any period that has not run.</div></div>
+      <button class="ghost" id="sub-go">Subscribe for 1 period</button></div>
+  </div>`;
+}
+/** Once subscribed, show the commitment as a timeline of periods. */
+function subActiveHtml(d, sub) {
+  const now = Date.now();
+  const dots = (sub.periods ?? []).map((p) => {
+    const state = p.executed_at ? "done" : p.due_at < now ? "due" : "ahead";
+    const when = new Date(p.due_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return `<li class="${state}" title="${esc(p.schedule_id)} · ${esc(when)}"><i></i><span>${esc(when)}</span></li>`;
+  }).join("");
+  return `<div class="subcard on">
+    <div class="s-top"><div><b>${icon("check")} Subscribed</b>
+      <div class="sub">${esc(units(d.pricing, sub.includesUnits ?? 0))} included each period · ${hbar(sub.committed)} committed on the ledger. Calls below cost nothing until the period's usage runs out.</div></div></div>
+    <ol class="periods">${dots}</ol>
+  </div>`;
+}
+
+async function subscribe(l) {
+  const b = $("sub-go");
+  if (b) { b.disabled = true; b.textContent = "Signing the payments…"; }
+  const r = await fetch("/playground/subscribe", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ service_id: l.service_id, periods: 1 }),
+  }).then((x) => x.json()).catch((e) => ({ ok: false, error: String(e) }));
+  if (!r.ok) {
+    if (b) { b.disabled = false; b.textContent = "Subscribe for 1 period"; }
+    toast(`Couldn't subscribe: ${esc(friendly(r.error))}`, "bad", 6000);
+    return;
+  }
+  SUBS.set(l.service_id, r);
+  toast(`Subscribed · ${hbar(r.committed)} committed`);
+  renderSheet(true);
 }
 
 /** Keep the advanced editor showing what the friendly form would send. */
@@ -305,6 +358,14 @@ function refreshCostLine() {
   const u = recipe.estimateUnits(l.descriptor, f);
   if (u != null) { est = priceFor(p, p.max_units ? Math.min(u, p.max_units) : u); exact = true; }
   else if (l.price.typical_call != null) est = l.price.typical_call;
+  // Inside a paid period there is no price to warn about.
+  if (TRY.subscribed) {
+    const sub = SUBS.get(l.service_id);
+    $("costline").className = "costline covered";
+    $("costline").innerHTML = `<span class="cl-est">${icon("check")} Included in your subscription${u != null ? ` — ${esc(units(p, u))} of ${esc(units(p, sub?.includesUnits ?? 0))} this period` : ""}</span>
+      <span class="cl-lim">no payment for this call</span>`;
+    return;
+  }
   const overs = est != null && est > Number(LIM.perRequest);
   $("costline").className = `costline${overs ? " over" : ""}`;
   $("costline").innerHTML = `
@@ -326,6 +387,7 @@ async function runTry() {
   const { req, f } = currentRequest();
   const out = $("t-out");
   if (req.stream) return streamTry(l, req, f, out);
+  if (TRY.subscribed) return coveredCall(l, req, f, out);
   if (!W.ok) { out.innerHTML = errorHtml("No wallet set up", "Add BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY to .env, or run the offline demo.", false); return; }
 
   $("t-go").disabled = true;
@@ -351,6 +413,28 @@ async function runTry() {
   }
   steps.push({ t: "Checked your limits", d: overReq ? `above your ${hbar(LIM.perRequest)} limit: asking you first` : overSes ? `would pass your ${hbar(LIM.session)} session limit: asking you first` : `within your ${hbar(LIM.perRequest)} limit` });
   renderPaySheet(l, q, f, out, steps, { overReq, overSes });
+}
+
+/** Inside a paid period there is no quote and no signature: the commitment
+ *  was made when the schedules were signed. */
+async function coveredCall(l, req, f, out) {
+  const d = l.descriptor;
+  $("t-go").disabled = true;
+  out.innerHTML = workingHtml(TRY.recipe.working);
+  const r = await fetch("/playground/call", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ service_id: d.service_id, method: req.method, path: req.path, body: req.body || undefined, maxUnits: req.maxUnits }),
+  }).then((x) => x.json()).catch((e) => ({ ok: false, error: String(e) }));
+  $("t-go").disabled = false;
+  if (!r.ok) { out.innerHTML = errorHtml("That didn't work", r.error); bindRetry(out, runTry); return; }
+  const rc = r.result.receipt;
+  out.innerHTML = `<div class="receipt-card covered">
+      <div class="rc-head"><span class="rc-tick">${icon("check")}</span><b>Covered by your subscription</b></div>
+      <div class="rc-lines">
+        <span>Used</span><span>${esc(units(d.pricing, rc?.metered_units ?? 0))} of this period's allowance</span>
+        <span>Charged</span><span>nothing — the period was paid for in advance</span>
+      </div></div>${resultHtml(l, r.result.data, f)}`;
+  loadMine();
 }
 
 function renderPaySheet(l, q, f, out, steps, warn) {
@@ -694,5 +778,6 @@ document.addEventListener("input", (e) => {
   $("pc-out").innerHTML = `${esc(units(p, n))} → <b>${money(priceFor(p, n))}</b>`;
 });
 
+loadSubs();
 loadMarket().then(renderAgentSnippets);
 setInterval(loadMarket, 5000);

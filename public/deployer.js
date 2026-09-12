@@ -262,7 +262,6 @@ function renderLanes() {
   const el = $("lanes");
   if (!lanes.length) { el.innerHTML = `<div class="card empty">No live lanes${S.owner ? " for this wallet" : ""} yet: run <span class="mono">npm run demo:offline</span></div>`; return; }
   el.innerHTML = lanes.map((l) => {
-    const p = l.policy ?? {};
     const sampleUrl = `${location.protocol}//${location.hostname}:${l.port}${l.sample ?? "/"}`;
     return `<div class="card lane" data-lane="${esc(l.name)}">
       <h3>${esc(l.name)}</h3>
@@ -279,7 +278,6 @@ function renderLanes() {
       <div class="row" style="margin-top:8px">
         <label class="field">max ${esc(l.unit)}<input type="number" class="maxunits" min="1" placeholder="none"></label>
         <label class="field">max ${esc(l.currency)} / call<input type="number" class="maxhbar" min="0" step="0.0001" placeholder="none"></label>
-        <label class="check"><input type="checkbox" class="human"> human (World ID)</label>
         <button class="primary buy">Send test buyer</button>
       </div>
       ${l.tabs ? `<div class="tabline">
@@ -291,12 +289,6 @@ function renderLanes() {
       <div class="stream-out" hidden></div>
       <div class="meterbar" hidden><i></i></div>
       <div class="tick" hidden><span class="t-units">0 ${esc(l.unit)}</span><span class="t-cost">0 ${esc(l.currency)}</span></div>` : ""}
-      <div class="policy">
-        <span class="label">pricing policy</span>
-        <label class="check"><input type="checkbox" class="p-hvo" ${p.humanVerifiedOnly ? "checked" : ""}> bots pay</label>
-        <input type="number" class="p-mult" min="1" step="1" value="${p.botMultiplier ?? 10}" style="width:64px"><span class="label">× rate</span>
-        <label class="check"><input type="checkbox" class="p-block" ${p.blockBots ? "checked" : ""}> block bots</label>
-      </div>
       <div class="result" hidden></div>
     </div>`;
   }).join("");
@@ -309,9 +301,6 @@ function renderLanes() {
       card.dataset.autoStreamed = "1";
       setTimeout(() => testStream(card, lane), 300);
     }
-    const savePolicy = () => fetch(`/policy/${encodeURIComponent(lane.name)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-      humanVerifiedOnly: card.querySelector(".p-hvo").checked, botMultiplier: Number(card.querySelector(".p-mult").value) || 10, blockBots: card.querySelector(".p-block").checked }) });
-    card.querySelectorAll(".p-hvo,.p-mult,.p-block").forEach((i) => i.onchange = savePolicy);
   });
 }
 
@@ -368,12 +357,7 @@ async function testBuy(card, lane) {
   btn.disabled = true; out.hidden = false; out.innerHTML = `<span class="label">metering the call, then paying the quote…</span>`;
   const path = card.querySelector(".path")?.value ?? lane.sample ?? "/";
   const url = `http://127.0.0.1:${lane.port}${lane.sampleMethod === "GET" ? path : lane.sample ?? "/"}`;
-  let worldToken;
-  if (card.querySelector(".human").checked) {
-    const w = await fetch("/world/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet: "dashboard" }) }).then((r) => r.json()).catch(() => ({}));
-    worldToken = w.token;
-  }
-  const body = { url, method: lane.sampleMethod, body: card.querySelector(".body")?.value ?? lane.sampleBody, maxUnits: card.querySelector(".maxunits").value || undefined, maxPerCall: card.querySelector(".maxhbar").value || undefined, worldToken };
+  const body = { url, method: lane.sampleMethod, body: card.querySelector(".body")?.value ?? lane.sampleBody, maxUnits: card.querySelector(".maxunits").value || undefined, maxPerCall: card.querySelector(".maxhbar").value || undefined };
   try {
     const r = await fetch("/testbuyer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((x) => x.json());
     const rc = r.receipt;
