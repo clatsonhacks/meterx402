@@ -81,10 +81,29 @@ function renderExplore() {
     ? `${xs.length} of ${M.services.length} service${M.services.length === 1 ? "" : "s"}${live < M.services.length ? ` · ${live} online` : ""}`
     : "";
 
+  // Render featured services carousel (top 3 by reputation, online only)
+  const featured = M.services
+    .filter((l) => l.live && l.reputation.score >= 75)
+    .sort((a, b) => (b.reputation.score ?? 0) - (a.reputation.score ?? 0))
+    .slice(0, 3);
+  if (featured.length > 0 && M.loaded && !M.q) {
+    $("mkt-featured").innerHTML = `<div class="featured">
+      <div class="featured-head">Featured Services</div>
+      <div class="featured-track">${featured.map((l) => `<div class="featured-svc">${cardHtml(l)}</div>`).join("")}</div>
+    </div>`;
+    $("mkt-featured").querySelectorAll(".svc[data-id]").forEach((card) => {
+      const id = card.dataset.id;
+      card.onclick = (e) => openService(id, e.target.closest("[data-act]")?.dataset.act === "about" ? "about" : "try");
+      card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openService(id, "try"); } };
+    });
+  } else {
+    $("mkt-featured").innerHTML = "";
+  }
+
   if (!M.loaded) { $("mkt-grid").innerHTML = Array.from({ length: 3 }, () => `<div class="card svc skeleton"><div class="sk-row"></div><div class="sk-line"></div><div class="sk-line short"></div></div>`).join(""); return; }
   $("mkt-grid").innerHTML = xs.length ? xs.map(cardHtml).join("")
     : `<div class="card empty-state" style="grid-column:1/-1">${M.services.length
-        ? `Nothing matches “${esc(M.q)}”. Try another word, or pick <b>Everything</b>.`
+        ? `Nothing matches "${esc(M.q)}". Try another word, or pick <b>Everything</b>.`
         : `No services yet. Switch to <b>Deployer</b> to publish one, or run <span class="mono">npm run demo:offline</span>.`}</div>`;
 
   $("mkt-grid").querySelectorAll(".svc[data-id]").forEach((card) => {
