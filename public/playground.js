@@ -204,7 +204,7 @@ function a2aText(d, r) {
 }
 
 function renderPlayground() {
-  $("pg-integ").innerHTML = INTEGRATIONS.map((i) => `<button data-i="${i.id}" aria-pressed="${PG.integ === i.id}"><b>${esc(i.title)}</b><span>${esc(i.sub)}</span></button>`).join("");
+  $("pg-integ").innerHTML = INTEGRATIONS.map((i) => `<button role="tab" data-i="${i.id}" aria-pressed="${PG.integ === i.id}" aria-selected="${PG.integ === i.id}" title="${esc(i.sub)}">${esc(i.title)}</button>`).join("");
   $("pg-integ").querySelectorAll("button").forEach((b) => b.onclick = () => { PG.integ = b.dataset.i; PG.file = 0; renderPlayground(); });
   const d = svc();
   if (!d) { $("pg-code").innerHTML = `<div class="empty-state">No services yet. Publish one in <b>Deployer</b>.</div>`; $("pg-files").innerHTML = ""; return; }

@@ -22,7 +22,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createConnection } from "node:net";
-import { appendFileSync, createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 import { loadEnv, ROOT } from "./env.ts";
@@ -364,6 +364,31 @@ const server = createServer(async (req, res) => {
     // ── selling a dataset from the Deployer view ────────────────────────
     // The file stays on this machine; the hub only reads it to describe it,
     // and later to answer the rows a buyer has paid for.
+    // A browser cannot hand over a file path, only the file. Take the bytes,
+    // keep them under data/uploads on this machine, and answer with the path
+    // the check and publish steps already understand. Loopback only, like the
+    // rest of /deploy, and the same size ceiling the loader enforces.
+    if (req.method === "POST" && url.pathname === "/deploy/dataset/upload") {
+      const original = String(url.searchParams.get("name") ?? "dataset.csv");
+      const ext = extname(original).toLowerCase();
+      if (![".csv", ".tsv", ".json", ".jsonl", ".ndjson"].includes(ext)) {
+        return json(res, 200, { ok: false, error: "choose a .csv, .tsv, .json or .jsonl file" });
+      }
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const c of req) {
+        size += (c as Buffer).length;
+        if (size > 256 * 1024 * 1024) return json(res, 200, { ok: false, error: "that file is over 256 MB" });
+        chunks.push(c as Buffer);
+      }
+      if (!size) return json(res, 200, { ok: false, error: "that file is empty" });
+      const dir = resolve(ROOT, "data", "uploads");
+      mkdirSync(dir, { recursive: true });
+      const safe = original.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(-80) || `dataset${ext}`;
+      const path = resolve(dir, `${Date.now()}-${safe}`);
+      writeFileSync(path, Buffer.concat(chunks));
+      return json(res, 200, { ok: true, path, bytes: size, name: original });
+    }
     if (req.method === "POST" && url.pathname === "/deploy/dataset/check") {
       const b = await readBody(req);
       try {

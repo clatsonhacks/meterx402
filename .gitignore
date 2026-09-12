@@ -10,6 +10,7 @@ registry.offline.json
 ngrok.exe
 ngrok.zip
 .mcp.json
+data/uploads/
 
 # Test files
 test-dataset.csv

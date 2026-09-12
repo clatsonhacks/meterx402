@@ -715,12 +715,18 @@ function renderRound(r, out) {
 }
 
 // ── "for AI agents" snippets (Developers tab) ───────────────────────────
+let AGENT_TAB = 0;
+/** How an agent reaches the same services: one box, four tabs, no gaps. */
 function renderAgentSnippets() {
   const reg = `curl -s '${HUB}/registry/services?capability=weather_forecast&minReputation=80'`;
   const mcp = JSON.stringify({ mcpServers: { meterx402: { command: "npx", args: ["-y", "mx402", "mcp"], env: { MX_HUB: HUB, BUYER_ACCOUNT_ID: "0.0.…", BUYER_PRIVATE_KEY: "302e…", BUYER_BUDGET: "1 HBAR" } } } }, null, 2);
   const sdk = `import { MeterX402Agent } from "mx402";\n\nconst agent = new MeterX402Agent({ wallet, budget: "1 HBAR", registry: "${HUB}" });\nconst r = await agent.call("weather_forecast");   // discover → quote → pay → receipt`;
   const a2a = `# every service is an A2A agent\ncurl -s ${M.services[0]?.descriptor.links.a2a_card ?? "<endpoint>/.well-known/agent.json"}`;
-  $("agent-snippets").innerHTML = [["Registry API", reg], ["MCP server (Claude, any MCP client)", mcp], ["SDK", sdk], ["A2A", a2a]].map(([t, c]) => snippet(t, c)).join("");
+  const tabs = [["Registry API", reg, "Find services by what they do."], ["MCP", mcp, "Claude and any MCP client."], ["SDK", sdk, "Discover, pay and verify in code."], ["A2A", a2a, "Every service is an A2A agent."]];
+  const [, code, note] = tabs[AGENT_TAB] ?? tabs[0];
+  $("agent-snippets").innerHTML = `<div class="tabs2">${tabs.map(([t], i) => `<button data-at="${i}" aria-pressed="${i === AGENT_TAB}">${esc(t)}</button>`).join("")}</div>
+    <div class="hint">${esc(note)}</div>${snippet("", code)}`;
+  $("agent-snippets").querySelectorAll("[data-at]").forEach((btn) => btn.onclick = () => { AGENT_TAB = Number(btn.dataset.at); renderAgentSnippets(); });
   bindCopy($("agent-snippets"));
 }
 
