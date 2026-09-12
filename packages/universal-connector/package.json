@@ -1,0 +1,53 @@
+{
+  "name": "@meterx402/universal-connector",
+  "version": "0.1.0",
+  "description": "Universal AI connector for MeterX402 - works with Claude, ChatGPT, Gemini, Grok, and any LLM",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "meterx402-connector": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "openapi.yaml"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/server.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "claude",
+    "chatgpt",
+    "gemini",
+    "grok",
+    "perplexity",
+    "api",
+    "connector",
+    "plugin",
+    "mcp",
+    "openapi",
+    "function-calling"
+  ],
+  "author": "MeterX402",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clatsonhacks/meterx402.git",
+    "directory": "packages/universal-connector"
+  },
+  "dependencies": {
+    "@hiero-ledger/sdk": "^2.85.0",
+    "@x402/core": "2.25.0",
+    "@x402/fetch": "2.25.0",
+    "@x402/hedera": "2.25.0",
+    "hono": "^4.13.7",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
