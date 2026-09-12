@@ -3,6 +3,33 @@
 // limits, and toasts. Loaded after deployer.js, whose helpers ($, esc, fmt,
 // short, time) it reuses.
 
+// ── theme: system / light / dark ────────────────────────────────────────
+// Three states, not two. "System" is the default and the honest one: most
+// people have already told their OS what they want. An explicit choice wins
+// over the system preference, survives a reload, and is applied before first
+// paint by a snippet in <head> so there is no white flash on the way in.
+const THEME_KEY = "mx402.theme";
+const themePref = () => { try { const t = localStorage.getItem(THEME_KEY); return t === "light" || t === "dark" ? t : "system"; } catch { return "system"; } };
+const activeTheme = () => {
+  const p = themePref();
+  return p === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : p;
+};
+function applyTheme(pref) {
+  if (pref === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", pref);
+  try { pref === "system" ? localStorage.removeItem(THEME_KEY) : localStorage.setItem(THEME_KEY, pref); } catch {}
+  // keep the browser chrome (mobile address bar) in step with the page
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", activeTheme() === "dark" ? "#1a1a20" : "#f9f9f7");
+  for (const b of document.querySelectorAll("[data-theme-set]")) {
+    b.setAttribute("aria-checked", String(b.dataset.themeSet === pref));
+  }
+  if (typeof renderCharges === "function" && !$("view-deployer").hidden) { renderCharges(); renderHours(); }
+}
+for (const b of document.querySelectorAll("[data-theme-set]")) b.onclick = () => applyTheme(b.dataset.themeSet);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (themePref() === "system") applyTheme("system"); });
+applyTheme(themePref());
+
 // ── names, categories, units ────────────────────────────────────────────
 const CATS = {
   text_generation: { label: "AI Chat", icon: "💬", hue: 265 },
