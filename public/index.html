@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MeterX402</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232a78d6' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='m12 13.8 4.2-4.2'/%3E%3Cpath d='M3.5 18.8a10 10 0 1 1 17 0'/%3E%3C/svg%3E">
+<meta name="description" content="MeterX402 meters any API and charges for exactly what each call uses — tokens, rows, bytes — settled on Hedera with x402. Set a spending limit; pay per use, not per call.">
+<meta property="og:title" content="MeterX402 — pay only for what you use">
+<meta property="og:description" content="Usage-based payments for APIs and AI agents: metered per token or row, settled on Hedera, with a spending limit you set.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#f9f9f7">
 <!-- Apply the stored theme before first paint: otherwise a dark-mode visitor
      gets a white flash while the stylesheet and scripts load. -->
@@ -14,7 +19,8 @@
 <link rel="stylesheet" href="/consumer.css">
 </head>
 <body class="mode-user">
-<div class="topbar"><div class="topbar-in">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><div class="topbar-in">
   <div class="brand"><span class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 13.8 4.2-4.2"/><path d="M3.5 18.8a10 10 0 1 1 17 0"/></svg></span>MeterX402<small>pay only for what you use</small></div>
   <div class="switch" role="group" aria-label="Mode">
     <button id="mode-user" aria-pressed="true" title="Find and use services">
@@ -45,19 +51,19 @@
     <span class="chip dep-only"><span class="dot" id="wsdot"></span><span id="wstext">connecting</span></span>
     <span class="chip dep-only" id="hcs" hidden></span>
   </div>
-</div></div>
+</div></header>
 
 <div class="netbar" id="netbar" role="status" hidden></div>
 
-<div class="wrap">
+<main class="wrap" id="main">
 
   <!-- ═══════════════════════════ USER ═══════════════════════════ -->
   <section class="view" id="view-user">
-    <div class="subnav" role="tablist" aria-label="User views">
+    <nav class="subnav" role="tablist" aria-label="User views">
       <button role="tab" id="tab-market" aria-selected="true">Explore</button>
       <button role="tab" id="tab-activity" aria-selected="false">Activity</button>
       <button role="tab" id="tab-play" aria-selected="false">Developers</button>
-    </div>
+    </nav>
 
     <!-- Explore -->
     <div id="user-market">
@@ -110,7 +116,7 @@
 
     <!-- Activity -->
     <div id="user-activity" hidden>
-      <div class="lede">Your activity</div>
+      <h1 class="lede">Your activity</h1>
       <span class="lede-sub">Everything this wallet paid for, what it got, and the proof on Hedera.</span>
       <div class="act-kpis" id="act-kpis"></div>
       <div class="card" id="act-list"></div>
@@ -118,7 +124,7 @@
 
     <!-- Developers -->
     <div id="user-play" hidden>
-      <div class="lede">Developers</div>
+      <h1 class="lede">Developers</h1>
       <span class="lede-sub">Everything on this page is also available to code and AI agents. Pick a service and a way in: the code is generated from the service's live descriptor, and <b>Run</b> performs the same call, one lifecycle step at a time, with real settlement.</span>
 
       <details class="card agents-note" id="agents-note" open>
@@ -157,7 +163,7 @@
   <!-- ═══════════════════════════ DEPLOYER ═══════════════════════════ -->
   <section class="view" id="view-deployer" hidden>
     <div class="toolbar" style="margin-bottom:10px;align-items:flex-end">
-      <div><div class="lede" style="margin:0 0 2px 0">Your services</div><span class="earn" id="earn-line">Sell any API by usage. Buyers pay for exactly what each call returns.</span></div>
+      <div><h1 class="lede" style="margin:0 0 2px 0">Your services</h1><span class="earn" id="earn-line">Sell any API by usage. Buyers pay for exactly what each call returns.</span></div>
       <span class="spacer"></span>
       <span class="field" style="flex-direction:row;align-items:center;gap:8px">Payout wallet
         <input type="text" id="owner" placeholder="all wallets (0.0.x / 0x…)" style="width:220px"></span>
@@ -303,7 +309,7 @@
     </div>
   </div>
   </section>
-</div>
+</main>
 <div class="tip" id="tip" hidden></div>
 <div id="drawer-root"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>

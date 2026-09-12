@@ -143,7 +143,7 @@ function renderSheet(fresh) {
   $("drawer-root").querySelectorAll("[data-t]").forEach((b) => b.onclick = () => { M.tab = b.dataset.t; renderSheet(true); });
   const body = $("dr-body");
   if (M.tab === "try") renderTry(body, l);
-  if (M.tab === "about") body.innerHTML = aboutHtml(l);
+  if (M.tab === "about") { body.innerHTML = aboutHtml(l); bindCopy(body); verifyIdentity(); }
   if (M.tab === "dev") { body.innerHTML = devHtml(l); bindCopy(body); body.querySelector("#dr-pg")?.addEventListener("click", () => { closeService(); openPlayground(d.service_id); }); }
 }
 
@@ -184,6 +184,14 @@ function aboutHtml(l) {
     <h4>Recent uses</h4>
     ${recent ? `<ul class="recent">${recent}</ul>` : `<div class="sub">No paid uses yet.</div>`}
 
+    <h4>Identity</h4>
+    ${d.uaid ? `<div class="uaid" id="uaid-box" data-uaid="${esc(d.uaid)}">
+        <div class="u-row"><span class="u-state" id="uaid-state">checking…</span>
+          <code class="mono u-id" title="${esc(d.uaid)}">${esc(d.uaid.split(";")[0])}</code>
+          <button class="copy" data-code="${esc(d.uaid)}">copy</button></div>
+        <div class="sub">An HCS-14 Universal Agent ID. It is a hash of what this agent <i>is</i> — registry, name, version, protocol, payout account and skills — and deliberately not of where it is hosted or what it charges, so it survives a move or a new price. Anyone can recompute it, which is how the registry checks the claim rather than taking it.</div>
+      </div>` : `<div class="sub">This service predates agent identities and has no UAID yet.</div>`}
+
     <h4>Good to know</h4>
     <div class="kv">
       <span>Run by</span><span class="mono">${esc(d.owner.account)}</span>
@@ -192,6 +200,18 @@ function aboutHtml(l) {
       ${d.payment.streaming ? `<span>Streaming</span><span>Yes, on a prepaid tab</span>` : ""}
       <span>Most per call</span><span>${cap ? esc(units(p, cap)) : "no cap"}</span>
     </div>`;
+}
+
+/** Ask the registry to re-derive this agent's id and say whether it matches. */
+async function verifyIdentity() {
+  const box = $("uaid-box"), el = $("uaid-state");
+  if (!box || !el) return;
+  try {
+    const r = await fetch(`/registry/agents/${encodeURIComponent(box.dataset.uaid)}`).then((x) => x.json());
+    if (r.verified === true) { el.textContent = "✓ Verified"; el.className = "u-state ok"; el.title = "The registry recomputed the hash from this agent's own fields and got the same id"; }
+    else if (r.verified === false) { el.textContent = "✗ Does not match"; el.className = "u-state bad"; el.title = r.reason ?? ""; }
+    else { el.textContent = "Self-asserted"; el.className = "u-state"; el.title = "A DID-based identity: this registry cannot recompute it"; }
+  } catch { el.textContent = "unverified"; }
 }
 
 function devHtml(l) {
