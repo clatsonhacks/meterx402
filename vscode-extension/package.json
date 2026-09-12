@@ -1,0 +1,188 @@
+{
+  "name": "meterx402",
+  "displayName": "MeterX402",
+  "description": "Browse, call, and publish metered APIs. Pay only for what you use.",
+  "version": "0.1.0",
+  "publisher": "meterx402",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clatsonhacks/meterx402"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "api",
+    "blockchain",
+    "hedera",
+    "metered",
+    "dataset",
+    "ai",
+    "llm"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "meterx402.searchServices",
+        "title": "Search Services",
+        "category": "MeterX402",
+        "icon": "$(search)"
+      },
+      {
+        "command": "meterx402.refreshServices",
+        "title": "Refresh Services",
+        "category": "MeterX402",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "meterx402.callService",
+        "title": "Call Service",
+        "category": "MeterX402",
+        "icon": "$(play)"
+      },
+      {
+        "command": "meterx402.publishDataset",
+        "title": "Publish Dataset",
+        "category": "MeterX402",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "meterx402.publishAPI",
+        "title": "Publish API",
+        "category": "MeterX402",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "meterx402.viewWallet",
+        "title": "View Wallet & Spending Limits",
+        "category": "MeterX402",
+        "icon": "$(credit-card)"
+      },
+      {
+        "command": "meterx402.openDashboard",
+        "title": "Open Dashboard",
+        "category": "MeterX402",
+        "icon": "$(dashboard)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "meterx402",
+          "title": "MeterX402",
+          "icon": "resources/logo.svg"
+        }
+      ]
+    },
+    "views": {
+      "meterx402": [
+        {
+          "id": "meterx402.services",
+          "name": "Services",
+          "icon": "$(library)",
+          "contextualTitle": "MeterX402 Services"
+        },
+        {
+          "id": "meterx402.myServices",
+          "name": "My Published Services",
+          "icon": "$(package)"
+        },
+        {
+          "id": "meterx402.activity",
+          "name": "Activity",
+          "icon": "$(history)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "meterx402.services",
+        "contents": "Welcome to MeterX402! Browse and call metered APIs.\n[Search Services](command:meterx402.searchServices)\n[Open Dashboard](command:meterx402.openDashboard)"
+      }
+    ],
+    "configuration": {
+      "title": "MeterX402",
+      "properties": {
+        "meterx402.hubUrl": {
+          "type": "string",
+          "default": "http://localhost:4021",
+          "description": "MeterX402 hub URL"
+        },
+        "meterx402.buyerAccountId": {
+          "type": "string",
+          "default": "",
+          "description": "Your Hedera account ID for buying services (0.0.xxxxx)"
+        },
+        "meterx402.buyerPrivateKey": {
+          "type": "string",
+          "default": "",
+          "description": "Your private key (stored securely in VSCode settings)"
+        },
+        "meterx402.maxPerCall": {
+          "type": "string",
+          "default": "0.1",
+          "description": "Maximum HBAR to spend per API call"
+        },
+        "meterx402.budget": {
+          "type": "string",
+          "default": "1",
+          "description": "Total HBAR budget for all calls"
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "meterx402.refreshServices",
+          "when": "view == meterx402.services",
+          "group": "navigation"
+        },
+        {
+          "command": "meterx402.searchServices",
+          "when": "view == meterx402.services",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "meterx402.callService",
+          "when": "view == meterx402.services && viewItem == service",
+          "group": "inline"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "meterx402.publishDataset",
+          "when": "resourceExtname =~ /\\.(csv|json|jsonl)$/",
+          "group": "meterx402@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.x",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {}
+}
