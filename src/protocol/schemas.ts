@@ -68,6 +68,15 @@ export const ServiceDescriptor = z.object({
     protocol: z.literal("x402"),
     settlement: z.array(SettlementOption).min(1),
     streaming: z.boolean(),            // only ever true where tabs are offered
+    /** Pre-signed future payments (Hedera scheduled transactions). Unlike an
+     *  allowance, these are commitments the seller can count before they land. */
+    subscription: z.object({
+      price: decimal,                  // per period
+      period_sec: z.number().int().positive(),
+      max_periods: z.number().int().positive(),
+      includes_units: z.number().int().nonnegative().nullable(),
+      open: z.string().url(),
+    }).optional(),
   }),
   interfaces: z.array(z.enum(["rest", "graphql", "a2a", "mcp", "sdk"])).min(1),
   auth: z.object({
@@ -136,9 +145,10 @@ export type PaymentAuthorization = z.infer<typeof PaymentAuthorization>;
 export const SettlementReceipt = z.object({
   mx402: z.literal(PROTOCOL_VERSION),
   receipt_id: z.string(),
-  scheme: z.enum(["exact", "tab"]),
+  scheme: z.enum(["exact", "tab", "subscription"]),
   quote_id: z.string().nullable(),
   tab_id: z.string().nullable(),
+  subscription_id: z.string().nullable().optional(),  // subscription: the period's commitment
   service_id: z.string(),
   buyer: z.string(),
   seller: z.string(),

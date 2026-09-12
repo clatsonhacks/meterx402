@@ -12,7 +12,7 @@
 
 import {
   AccountId, Client, Hbar, PrivateKey,
-  TopicCreateTransaction, TopicMessageSubmitTransaction, TransferTransaction,
+  PublicKey, TopicCreateTransaction, TopicMessageSubmitTransaction, TransferTransaction,
 } from "@hiero-ledger/sdk";
 import { hashscanTx } from "./events.ts";
 
@@ -81,6 +81,20 @@ export async function hederaTransfer(to: string, hbar: number): Promise<HederaRe
   await tx.getReceipt(c);
   const txId = tx.transactionId!.toString();
   return { txId, topicId: "", hashscan: hashscanTx(txId, NET()) };
+}
+
+/** An account's public key, straight off the mirror node. Needs no operator,
+ *  no client and no key of our own: it is a public record. */
+export async function mirrorPublicKey(account: string): Promise<PublicKey | null> {
+  try {
+    const r = await fetch(`${MIRROR()}/accounts/${account}`);
+    if (!r.ok) return null;
+    const k = ((await r.json()) as any)?.key;
+    if (!k?.key) return null;
+    return k._type === "ED25519" ? PublicKey.fromStringED25519(k.key)
+      : k._type === "ECDSA_SECP256K1" ? PublicKey.fromStringECDSA(k.key)
+      : PublicKey.fromString(k.key);
+  } catch { return null; }
 }
 
 export interface HederaAccount { accountId: string; evm: string | null; balance: number; created: boolean; hashscan: string; }

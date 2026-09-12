@@ -18,6 +18,7 @@ export type MXEventType =
   | "hedera_receipt" // the settlement transaction on HashScan: { hashscan, txId }
   | "hcs_receipt"    // HCS topic message recording this payment: { topicId, hashscan }
   | "policy"         // a lane's pricing policy changed from the dashboard
+  | "subscription_open"
   | "tab_open"       // a buyer opened a Metered Tab: { tab, owner, allowance, spender }
   | "tab_flush"      // a tab's usage was settled in one approved transfer: { tab, amount, calls, txHash } or { error }
   | "tab_close"      // tab closed: { tab, calls, units, pulled }

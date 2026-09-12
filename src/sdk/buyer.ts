@@ -95,6 +95,20 @@ export class BudgetError extends Error {
 }
 
 /** "1.5 HBAR" → { amount: "1.5", currency: "HBAR" }; 1.5 → { amount: "1.5" }. */
+/** A live subscription: the commitments, and a way to spend against them. */
+export interface SubscriptionHandle {
+  token: string;
+  subscription: string;
+  service_id: string;
+  periods: { schedule_id: string; due_at: number; amount_atomic: string; executed_at: number | null }[];
+  committed: string;
+  includesUnits: number | null;
+  /** Call the service against this subscription (no per-call payment). */
+  call(req?: CallRequest): Promise<CallResult>;
+  /** Cancel a period that has not executed yet. */
+  cancel(scheduleId: string): Promise<{ ok: boolean; error?: string }>;
+}
+
 export function parseAmount(v: string | number | undefined): { amount: string; currency?: string } | null {
   if (v == null || v === "") return null;
   const m = /^\s*([0-9.]+)\s*([A-Za-z]+)?\s*$/.exec(String(v));
@@ -244,6 +258,53 @@ export class MeterX402 {
     } finally {
       this.reserved -= amount;
     }
+  }
+
+  /** Subscribe: pre-sign one transfer per period, then call without paying.
+   *
+   *  The commitment is on the ledger, not in this process — the seller reads
+   *  the schedules itself and believes those, and the buyer keeps the admin
+   *  key, so any period that has not run can still be cancelled. */
+  async subscribe(target: string | ServiceDescriptor | Listing, opts: { periods?: number; startAt?: number } = {}): Promise<SubscriptionHandle> {
+    const service = await this.resolve(target);
+    const terms = service.payment.subscription;
+    if (!terms) throw new BudgetError(`${service.service_id} does not sell subscriptions`);
+    const periods = Math.min(opts.periods ?? 1, terms.max_periods);
+
+    const open = await fetch(terms.open).then((r) => r.json() as any);
+    if (!open?.nonce) throw new BudgetError(`${service.service_id} would not offer a subscription challenge`);
+    const amountAtomic = BigInt(open.amountAtomic);
+    if (this.budget && amountAtomic * BigInt(periods) > this.budget.atomic) {
+      throw new BudgetError(`${periods} periods × ${terms.price} would exceed the session budget`);
+    }
+
+    const { scheduleSubscription, subscriptionChallenge } = await import("../subscriptions.ts");
+    const scheduled = await scheduleSubscription({
+      buyer: { accountId: this.accountId, privateKey: this.key },
+      payTo: open.payTo, amountAtomic, periods, periodSec: terms.period_sec,
+      startAt: opts.startAt, memo: `mx402 ${service.service_id}`, network: this.network,
+    });
+
+    const signature = Buffer.from(this.key.sign(Buffer.from(subscriptionChallenge(open.lane, this.accountId, open.nonce)))).toString("hex");
+    const res = await fetch(terms.open, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ buyer: this.accountId, nonce: open.nonce, signature, schedules: scheduled.map((p) => p.schedule_id) }),
+    });
+    const body = (await res.json()) as any;
+    if (!res.ok) throw new BudgetError(`subscription refused: ${body?.error ?? res.status}`);
+
+    const call = async (req: CallRequest = {}): Promise<CallResult> => {
+      const r = await this.call(service, { ...req, headers: { ...(req.headers ?? {}), "x-mx402-subscription": body.token } });
+      return r;
+    };
+    return {
+      token: body.token, subscription: body.subscription, service_id: service.service_id,
+      periods: scheduled, committed: body.committed, includesUnits: body.includesUnits ?? null, call,
+      cancel: async (scheduleId: string) => {
+        const { cancelScheduled } = await import("../subscriptions.ts");
+        return cancelScheduled(scheduleId, { accountId: this.accountId, privateKey: this.key }, this.network);
+      },
+    };
   }
 
   /** The x402 client, signing only this buyer's allowed assets and ceiling. */

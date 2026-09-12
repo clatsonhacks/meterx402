@@ -29,6 +29,7 @@ import { HoldStore, RateLimiter, fingerprint, sha256 } from "./holds.ts";
 import { CHAINS, explorerTx, hederaTokenPreset, type ChainPreset } from "./chains.ts";
 import { verifySessionToken } from "./world.ts";
 import { TabBook, hederaTabLedger, mockTabLedger, type Tab, type TabLedger } from "./tabs.ts";
+import { SubscriptionBook, subscriptionChallenge, type SubscriptionTerms } from "./subscriptions.ts";
 import { parseHederaKey } from "./hedera.ts";
 import { X402ExactAdapter } from "./settlement/x402-exact.ts";
 import { PROTOCOL_VERSION, ServiceDescriptor, encodeHeader, type PaymentQuote, type SettlementReceipt } from "./protocol/schemas.ts";
@@ -62,6 +63,8 @@ export interface GatewayConfig {
   quiet?: boolean;
   /** Metered Tabs (allowance-backed sessions). Hedera only. */
   tab?: { ledger: TabLedger; spender: string; flushAt?: number | string; flushEverySec?: number };
+  /** Sell access by the period, paid by pre-signed scheduled transfers. */
+  subscription?: { price: string; periodSec: number; maxPeriods?: number; includesUnits?: number };
   /** Allow streaming responses on a tab (default true). Never available on the
    *  pay-per-call path: there the price only exists once the response is done. */
   stream?: boolean;
@@ -94,7 +97,7 @@ type Policy = { humanVerifiedOnly?: boolean; botMultiplier?: number; blockBots?:
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-  "access-control-allow-headers": "content-type,payment-signature,x-payment,x-meter-max-units,x-meter-tab,x-world-proof,x-mx402-interface,access-control-expose-headers",
+  "access-control-allow-headers": "content-type,payment-signature,x-payment,x-meter-max-units,x-meter-tab,x-mx402-subscription,x-world-proof,x-mx402-interface,access-control-expose-headers",
   "access-control-expose-headers": "payment-required,payment-response,x-payment-response,x-meter-quote,x-meter-unit,x-meter-measured,x-meter-billable,x-meter-cap,x-meter-rate,x-meter-per,x-meter-amount,x-meter-currency,x-meter-body-sha256,x-meter-ceiling,x-mx402-quote,x-mx402-receipt",
   "access-control-allow-private-network": "true",
 };
@@ -144,6 +147,19 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
   if (cfg.tab && chain.name !== "hedera") throw new Error(chain.asset !== "0.0.0"
     ? "--tab settles HBAR allowances, so it cannot be combined with --asset yet"
     : "--tab needs Hedera (allowances are a native Hedera feature)");
+  // Subscriptions: the buyer pre-signs future transfers; we only ever read
+  // them off the ledger. No key, no allowance, no trust in the buyer's word.
+  const subTerms: SubscriptionTerms | null = cfg.subscription ? {
+    price: plainDecimal(cfg.subscription.price),
+    period_sec: cfg.subscription.periodSec,
+    max_periods: cfg.subscription.maxPeriods ?? 12,
+    includes_units: cfg.subscription.includesUnits ?? null,
+    payTo: cfg.payTo, currency: chain.currency, network,
+  } : null;
+  const subs = subTerms ? new SubscriptionBook({
+    lane, payTo: cfg.payTo, terms: subTerms, amountAtomic: toAtomic(subTerms.price, chain.decimals),
+  }) : null;
+
   const tabFlushAt = toAtomic(cfg.tab?.flushAt ?? "0.01", chain.decimals);
   const tabs = cfg.tab ? new TabBook({
     lane, ledger: cfg.tab.ledger, spender: cfg.tab.spender, payTo: cfg.payTo, flushAt: tabFlushAt,
@@ -257,7 +273,16 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
       meter: meter.spec, unit: card.unit, rate: plainDecimal(card.rate), per: Number(card.per ?? 1),
       min: plainDecimal(card.min ?? 0), free: card.free ?? 0, max_units: card.maxUnits ?? null, currency: chain.currency,
     },
-    payment: { protocol: "x402", settlement: settlement.capabilities(), streaming: !!tabs && cfg.stream !== false && !!meter.stream },
+    payment: {
+      protocol: "x402", settlement: settlement.capabilities(),
+      streaming: !!tabs && cfg.stream !== false && !!meter.stream,
+      ...(subTerms ? {
+        subscription: {
+          price: subTerms.price, period_sec: subTerms.period_sec, max_periods: subTerms.max_periods,
+          includes_units: subTerms.includes_units, open: `${endpoint}/.well-known/mx402/subscription`,
+        },
+      } : {}),
+    },
     interfaces: serviceType === "graphql" ? ["graphql", "rest", "a2a", "mcp", "sdk"] : ["rest", "a2a", "mcp", "sdk"],
     auth: { type: inferAuth(cfg.headers, cfg.query), held_by: "seller" },
     owner: { account: cfg.payTo, network },
@@ -265,6 +290,7 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
       descriptor: `${endpoint}/.well-known/mx402`,
       a2a_card: `${endpoint}/.well-known/agent.json`,
       ...(tabs ? { tab: `${endpoint}/.well-known/mx402/tab` } : {}),
+      ...(subs ? { subscription: `${endpoint}/.well-known/mx402/subscription` } : {}),
     },
     published_at: publishedAt,
   });
@@ -299,6 +325,55 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
     log(`[${lane}] 🧾 tab ${r.tab.id} opened by ${owner}, allowance ${fromAtomic(r.tab.allowanceAtOpen, chain.decimals)} ${chain.currency}`);
     return c.json({ token: r.token, tab: r.tab.id, allowance: fromAtomic(r.tab.allowanceAtOpen, chain.decimals), flushAt: fromAtomic(tabFlushAt, chain.decimals) }, 200, CORS);
   });
+  app.get("/.well-known/mx402/subscription", (c) => {
+    if (!subs || !subTerms) return c.json({ error: "subscriptions_not_enabled" }, 404, CORS);
+    return c.json({
+      lane, payTo: cfg.payTo, network, asset: chain.asset, currency: chain.currency,
+      price: subTerms.price, periodSec: subTerms.period_sec, maxPeriods: subTerms.max_periods,
+      includesUnits: subTerms.includes_units,
+      amountAtomic: toAtomic(subTerms.price, chain.decimals).toString(),
+      ...subs.challenge(),
+      how: "1) create one Hedera scheduled transfer per period (wait_for_expiry, paying payTo the exact amount)  2) sign `mx402-sub:<lane>:<buyer>:<nonce>` with your account key  3) POST {buyer, nonce, signature, schedules:[id,…]}",
+      committed: fromAtomic(subs.committed().atomic, chain.decimals),
+    }, 200, CORS);
+  });
+  app.post("/.well-known/mx402/subscription", async (c) => {
+    if (!subs) return c.json({ error: "subscriptions_not_enabled" }, 404, CORS);
+    const { buyer, nonce, signature, schedules } = await c.req.json().catch(() => ({} as any));
+    if (!buyer || !nonce || !signature || !Array.isArray(schedules)) {
+      return c.json({ error: "buyer, nonce, signature and schedules[] required" }, 400, CORS);
+    }
+    const r = await subs.open(String(buyer), String(nonce), String(signature), schedules.map(String));
+    if (!r.ok) return c.json({ error: r.error }, 402, CORS);
+    const committed = subs.committed();
+    await send("subscription_open", r.sub.id, {
+      subscription: r.sub.id, buyer: r.sub.buyer, periods: r.sub.periods.length,
+      amount: fromAtomic(BigInt(r.sub.amount_atomic), chain.decimals), periodSec: r.sub.period_sec,
+      committed: fromAtomic(committed.atomic, chain.decimals), schedules: r.sub.periods.map((p) => p.schedule_id),
+    });
+    log(`[${lane}] 📅 subscription ${r.sub.id}: ${r.sub.periods.length} periods × ${fromAtomic(BigInt(r.sub.amount_atomic), chain.decimals)} ${chain.currency} committed by ${buyer}`);
+    return c.json({
+      token: r.token, subscription: r.sub.id,
+      periods: r.sub.periods.map((p) => ({ schedule_id: p.schedule_id, due_at: p.due_at, amount: fromAtomic(BigInt(p.amount_atomic), chain.decimals) })),
+      includesUnits: r.sub.includes_units,
+      committed: fromAtomic(committed.atomic, chain.decimals),
+    }, 200, CORS);
+  });
+  /** What the seller can already count on. */
+  app.get("/.well-known/mx402/subscriptions", async (c) => {
+    if (!subs) return c.json({ error: "subscriptions_not_enabled" }, 404, CORS);
+    await subs.refresh().catch(() => {});
+    const committed = subs.committed();
+    return c.json({
+      lane, payTo: cfg.payTo, currency: chain.currency,
+      committed: fromAtomic(committed.atomic, chain.decimals),
+      periodsAhead: committed.periods, subscribers: committed.subscriptions,
+      subscriptions: subs.all().map((s) => ({
+        id: s.id, buyer: s.buyer, period_sec: s.period_sec, includes_units: s.includes_units, used: s.used,
+        periods: s.periods.map((p) => ({ schedule_id: p.schedule_id, due_at: p.due_at, executed_at: p.executed_at, amount: fromAtomic(BigInt(p.amount_atomic), chain.decimals) })),
+      })),
+    }, 200, CORS);
+  });
   app.delete("/.well-known/mx402/tab", async (c) => {
     const t = tabs?.get(c.req.header("x-meter-tab"));
     if (!t) return c.json({ error: "unknown_or_expired_tab" }, 404, CORS);
@@ -325,6 +400,8 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
       return c.json({ error: "human_verification_required", message: "This API only serves World ID verified humans." }, 403, CORS);
     }
 
+    const subToken = c.req.header("x-mx402-subscription");
+    if (subToken && subs) return subCall(c, reqId, bodyText, world.ok, subToken);
     const tabToken = c.req.header("x-meter-tab");
     if (tabToken && tabs) return tabCall(c, reqId, bodyText, world.ok, tabToken);
     if (paymentHeader) return settleHeld(c, reqId, fp, paymentHeader, bodyText, world.ok);
@@ -354,7 +431,11 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
 
     const r = await runMetered(c, reqId, bodyText, verified);
     if ("response" in r) return r.response;
-    const { held, common } = r;
+    return holdAndQuote(c, reqId, fp, r.held, r.common, error);
+  }
+
+  /** Hold a metered response and answer 402 with its exact price. */
+  async function holdAndQuote(c: Context, reqId: string, fp: string, held: Held, common: Record<string, unknown>, error = "payment_required"): Promise<Response> {
     const { q, body, contentType } = held;
 
     // Nothing billable (free units, empty result): serve it, no payment.
@@ -614,6 +695,50 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
     };
   }
 
+  // ── Subscriptions: pre-signed future transfers (src/subscriptions.ts) ───
+  // The period's included units are spent first; once they run out the call
+  // falls back to ordinary pay-per-call rather than being quietly given away.
+  async function subCall(c: Context, reqId: string, bodyText: string, verified: boolean, token: string): Promise<Response> {
+    const sub = subs!.fromToken(token);
+    if (!sub) return c.json({ error: "unknown_or_expired_subscription" }, 402, CORS);
+    await send("request_in", reqId, { method: c.req.method, path: c.req.path, subscription: sub.id });
+
+    const r = await runMetered(c, reqId, bodyText, verified);
+    if ("response" in r) return r.response;
+    const { held, common } = r;
+    const spend = subs!.spend(sub, held.q.billable);
+    if (spend.excess > 0) {
+      // not covered: hold it and quote for it like any other call
+      return holdAndQuote(c, reqId, fingerprint(c.req.method, new URL(c.req.url).pathname + new URL(c.req.url).search, bodyText), held, common, "subscription_period_exhausted");
+    }
+    const receipt = subReceipt(sub, held.q.billable, held.bodySha256);
+    await send("settled", reqId, {
+      ...common, scheme: "subscription", subscription: sub.id, from: sub.buyer, units: held.q.billable,
+      amountAtomic: "0", payTo: cfg.payTo, network, txHash: null, verified: held.verified, receipt,
+      note: "covered by a pre-paid period",
+    });
+    return new Response(held.body, {
+      status: held.status,
+      headers: {
+        ...CORS, "content-type": held.contentType, ...meterHeaders(held, ""),
+        "x-mx402-subscription": sub.id,
+        "x-mx402-sub-used": String(sub.used),
+        "x-mx402-sub-included": sub.includes_units == null ? "unlimited" : String(sub.includes_units),
+        "x-mx402-receipt": encodeHeader(receipt),
+      },
+    });
+  }
+
+  function subReceipt(sub: { id: string; buyer: string }, units: number, bodySha256: string): SettlementReceipt {
+    return {
+      mx402: PROTOCOL_VERSION, receipt_id: crypto.randomUUID(), scheme: "subscription", quote_id: null, tab_id: null,
+      subscription_id: sub.id, service_id: serviceId, buyer: sub.buyer, seller: cfg.payTo,
+      metered_units: units, unit: card.unit, rate: plainDecimal(card.rate), per: Number(card.per ?? 1),
+      amount: "0", amount_atomic: "0", currency: chain.currency, network,
+      transaction_id: null, body_sha256: bodySha256, settled_at: Date.now(),
+    };
+  }
+
   // ── Metered Tabs: allowance-backed, no per-call payment (src/tabs.ts) ────
   async function tabCall(c: Context, reqId: string, bodyText: string, verified: boolean, token: string): Promise<Response> {
     const tab = tabs!.get(token);
@@ -817,6 +942,13 @@ Abuse limits (the seller does the work before being paid, so these bound it):
   --rpm <n>           unpaid requests per client per minute (0 = off)                                    [0]
   --trust-proxy       take the client address from x-forwarded-for
 
+Subscriptions (Hedera scheduled transactions): the buyer pre-signs one transfer
+per period, so the seller can count the revenue before it lands.
+  --subscribe <price> sell access by the period at this price per period
+  --period <sec>      how long a period is                                    [604800 = 7 days]
+  --sub-periods <n>   most periods a buyer may commit to at once              [12]
+  --sub-units <n>     metered units included per period (default: unlimited)
+
 Metered Tabs (Hedera): buyers approve an HBAR allowance once (their limit, enforced
 on-chain), then call with no per-call payment; the gateway settles usage in batches.
   --tab               enable tabs; spender = TAB_SPENDER_ID/KEY (or HEDERA_ACCOUNT_ID/KEY)
@@ -827,7 +959,7 @@ on-chain), then call with no per-call payment; the gateway settles usage in batc
 export function parseArgs(argv: string[]): GatewayConfig {
   const flag = (n: string, d?: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
   const flagAll = (n: string) => argv.reduce<string[]>((acc, a, i) => (a === `--${n}` && argv[i + 1] ? [...acc, argv[i + 1]] : acc), []);
-  const valueFlags = new Set(["wallet", "pay-to", "rate", "per", "min", "free", "max-units", "meter", "name", "port", "chain", "asset", "network", "facilitator", "header", "query", "sample", "method", "body", "hub", "hold-ttl", "max-holds", "rpm", "tab-flush", "tab-every", "service-id", "capability", "description", "type", "public-url", "registry"]);
+  const valueFlags = new Set(["wallet", "pay-to", "rate", "per", "min", "free", "max-units", "meter", "name", "port", "chain", "asset", "network", "facilitator", "header", "query", "sample", "method", "body", "hub", "hold-ttl", "max-holds", "rpm", "tab-flush", "tab-every", "subscribe", "period", "sub-periods", "sub-units", "service-id", "capability", "description", "type", "public-url", "registry"]);
   const upstream = argv.find((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--") && valueFlags.has(argv[i - 1].slice(2))));
   if (!upstream || argv.includes("--help")) { console.log(GATEWAY_HELP); process.exit(upstream ? 0 : 1); }
   const payTo = flag("wallet") ?? flag("pay-to");
@@ -860,6 +992,12 @@ export function parseArgs(argv: string[]): GatewayConfig {
     trustProxy: argv.includes("--trust-proxy"),
     hub: hubFlag === "none" ? null : hubFlag,
     tab: argv.includes("--tab") ? tabFromEnv(flag("tab-flush"), optNum("tab-every")) : undefined,
+    subscription: flag("subscribe") ? {
+      price: flag("subscribe")!,
+      periodSec: optNum("period") ?? 604800,
+      maxPeriods: optNum("sub-periods"),
+      includesUnits: optNum("sub-units"),
+    } : undefined,
     serviceId: flag("service-id"),
     capabilities: flagAll("capability"),
     description: flag("description"),

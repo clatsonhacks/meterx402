@@ -9,6 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { hederaTokenPreset, CHAINS } from "../src/chains.ts";
 import { SettlementOption } from "../src/protocol/schemas.ts";
+import type { Capability } from "../src/settlement/adapter.ts";
 import { selectRoute } from "../src/settlement/adapter.ts";
 import { MeterX402 } from "../src/sdk/buyer.ts";
 import { toAtomic } from "../src/pricing.ts";
@@ -78,7 +79,7 @@ test("odd fee fractions read as plain percentages", async () => {
 
 // ── the descriptor discloses it ───────────────────────────────────────────
 test("SettlementOption carries the ledger fee, and validates it", () => {
-  const base = { network: "hedera:testnet", asset: TOKEN, currency: "MXC", decimals: 6, schemes: ["exact"] as const };
+  const base = { network: "hedera:testnet", asset: TOKEN, currency: "MXC", decimals: 6, schemes: ["exact"] };
   const ok = SettlementOption.parse({ ...base, fee: { percent: "2", collector: "0.0.1", assessment: "inclusive", source: "hts-custom-fee" } });
   assert.equal(ok.fee?.percent, "2");
   assert.doesNotThrow(() => SettlementOption.parse(base), "a fee is optional");
@@ -87,15 +88,15 @@ test("SettlementOption carries the ledger fee, and validates it", () => {
 });
 
 // ── buyer and seller have to agree on the asset ───────────────────────────
-const hbarOption = { network: "hedera:testnet", asset: "0.0.0", currency: "HBAR", decimals: 8, schemes: ["exact"] as const };
-const mxcOption = { network: "hedera:testnet", asset: TOKEN, currency: "MXC", decimals: 6, schemes: ["exact"] as const };
+const hbarOption: Capability = { network: "hedera:testnet", asset: "0.0.0", currency: "HBAR", decimals: 8, schemes: ["exact"] };
+const mxcOption: Capability = { network: "hedera:testnet", asset: TOKEN, currency: "MXC", decimals: 6, schemes: ["exact"] };
 
 test("route selection matches the wallet's currency", () => {
   const mxcWallet = [{ network: "hedera:testnet", currencies: ["MXC"] }];
   const hbarWallet = [{ network: "hedera:testnet", currencies: ["HBAR"] }];
   assert.equal(selectRoute([mxcOption], mxcWallet)?.option.asset, TOKEN);
   assert.equal(selectRoute([mxcOption], hbarWallet), null, "an HBAR-only wallet cannot pay in credits");
-  assert.equal(selectRoute([hbarOption, mxcOption], mxcWallet)?.currency ?? selectRoute([hbarOption, mxcOption], mxcWallet)?.option.currency, "MXC");
+  assert.equal(selectRoute([hbarOption, mxcOption], mxcWallet)?.option.currency, "MXC", "picks the option the wallet can actually pay");
   assert.ok(selectRoute([mxcOption], [{ network: "hedera:testnet" }]), "a wallet with no stated currency takes what it is given");
 });
 

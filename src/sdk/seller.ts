@@ -42,6 +42,8 @@ export interface WrapOptions {
   chain?: string;
   /** Settle in an HTS token id instead of native HBAR. */
   asset?: string;
+  /** Sell access by the period, paid by pre-signed scheduled transfers. */
+  subscription?: { price: string; periodSec: number; maxPeriods?: number; includesUnits?: number };
   /** Offer Metered Tabs: the spender account that pulls allowances. */
   tab?: { spenderId: string; spenderKey: string; mockLedgerUrl?: string; flushAt?: string; flushEverySec?: number };
   quiet?: boolean;
@@ -77,7 +79,7 @@ export async function wrap(o: WrapOptions): Promise<WrappedService> {
     sample: o.sample, sampleMethod: o.method, sampleBody: o.body,
     hub: o.registry === undefined ? undefined : o.registry,
     serviceId: o.serviceId, capabilities: o.capabilities, description: o.description, publicUrl: o.publicUrl,
-    quiet: o.quiet, holdTtlSec: o.holdTtlSec, maxHolds: o.maxHolds,
+    quiet: o.quiet, holdTtlSec: o.holdTtlSec, maxHolds: o.maxHolds, subscription: o.subscription,
     tab: o.tab ? {
       ledger: o.tab.mockLedgerUrl ? mockTabLedger(o.tab.mockLedgerUrl, o.tab.spenderId, parseHederaKey(o.tab.spenderKey)) : hederaTabLedger(o.tab.spenderId, o.tab.spenderKey),
       spender: o.tab.spenderId, flushAt: o.tab.flushAt, flushEverySec: o.tab.flushEverySec,
