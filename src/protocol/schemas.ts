@@ -37,6 +37,10 @@ export const ServiceDescriptor = z.object({
   service_id: z.string().regex(/^[a-z0-9][a-z0-9-_.]{0,62}$/, "lowercase slug"),
   name: z.string().min(1),
   description: z.string().optional(),
+  /** HCS-14 Universal Agent ID: the same agent across Web2, EVM and Hedera.
+   *  Derived from what the agent IS (registry, name, version, protocol,
+   *  account, skills), never from where it is hosted or what it charges. */
+  uaid: z.string().regex(/^uaid:(aid|did):/).optional(),
   type: z.enum(["rest", "graphql", "llm", "mcp", "a2a"]),
   endpoint: z.string().url(),          // the payment-enabled base URL buyers call
   sample: z.object({ method: z.string(), path: z.string(), body: z.string().optional() }).optional(),

@@ -71,6 +71,8 @@ export function agentCard(d: ServiceDescriptor) {
     preferredTransport: "JSONRPC",
     version: "1.0.0",
     provider: { organization: d.owner.account, url: d.endpoint },
+    // HCS-14: one identity for this agent wherever it is met
+    ...(d.uaid ? { uaid: d.uaid, additionalInterfaces: [{ transport: "HCS-14", url: d.uaid }] } : {}),
     capabilities: {
       streaming: false,
       pushNotifications: false,
@@ -85,7 +87,7 @@ export function agentCard(d: ServiceDescriptor) {
       tags: [cap, d.pricing.unit, "x402", "metered"],
       examples: d.sample ? [`${d.sample.method} ${d.sample.path}`] : [],
     })),
-    "x-mx402": { service_id: d.service_id, descriptor: d.links.descriptor, pricing: d.pricing, settlement: d.payment.settlement },
+    "x-mx402": { service_id: d.service_id, uaid: d.uaid, descriptor: d.links.descriptor, pricing: d.pricing, settlement: d.payment.settlement },
   };
 }
 

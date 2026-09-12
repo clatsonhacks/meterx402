@@ -33,6 +33,7 @@ import { parseHederaKey } from "./hedera.ts";
 import { X402ExactAdapter } from "./settlement/x402-exact.ts";
 import { PROTOCOL_VERSION, ServiceDescriptor, encodeHeader, type PaymentQuote, type SettlementReceipt } from "./protocol/schemas.ts";
 import { inferAuth, inferCapabilities, inferType, plainDecimal, slug, type ServiceType } from "./protocol/describe.ts";
+import { createAid, skillsFor, toHederaCaip10, UAID_REGISTRY } from "./protocol/hcs14.ts";
 import { mountA2A } from "./adapters/a2a.ts";
 
 export interface GatewayConfig {
@@ -214,6 +215,25 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
   const endpoint = (cfg.publicUrl ?? `http://127.0.0.1:${cfg.port}`).replace(/\/+$/, "");
   const serviceType = cfg.type ?? inferType(card.unit, cfg.sampleBody);
   const publishedAt = new Date().toISOString();
+  // HCS-14 identity. Hashed over the six canonical fields only, so it survives
+  // a move to a new host, a new price, even a new hub.
+  const agentCapabilities = cfg.capabilities?.length ? cfg.capabilities : inferCapabilities(cfg.upstream, serviceType, cfg.sample);
+  const uaid = (() => {
+    try {
+      return createAid({
+        registry: UAID_REGISTRY,
+        name: serviceId,
+        version: PROTOCOL_VERSION,
+        protocol: "a2a",
+        nativeId: network.startsWith("hedera:") ? toHederaCaip10(network, cfg.payTo) : `${network}:${cfg.payTo}`,
+        skills: skillsFor(agentCapabilities),
+      }, { uid: serviceId, proto: "a2a" });
+    } catch (e) {
+      console.warn(`[${lane}] no UAID: ${String(e).split("\n")[0]}`);
+      return undefined;
+    }
+  })();
+
   const descriptor = (): ServiceDescriptor => ServiceDescriptor.parse({
     mx402: PROTOCOL_VERSION,
     service_id: serviceId,
@@ -222,7 +242,8 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
     type: serviceType,
     endpoint,
     sample: { method: (cfg.sampleMethod ?? "GET").toUpperCase(), path: cfg.sample ?? "/", ...(cfg.sampleBody ? { body: cfg.sampleBody } : {}) },
-    capabilities: cfg.capabilities?.length ? cfg.capabilities : inferCapabilities(cfg.upstream, serviceType, cfg.sample),
+    capabilities: agentCapabilities,
+    ...(uaid ? { uaid } : {}),
     pricing: {
       meter: meter.spec, unit: card.unit, rate: plainDecimal(card.rate), per: Number(card.per ?? 1),
       min: plainDecimal(card.min ?? 0), free: card.free ?? 0, max_units: card.maxUnits ?? null, currency: chain.currency,

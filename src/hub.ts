@@ -32,6 +32,8 @@ import { verifyWorldProof, issueSessionToken, rpContext, worldLive, worldMode } 
 import { hederaEnabled, ensureTopic, hederaReceipt, resolveOrCreateAccount, lookupAccount, type HederaAccount } from "./hedera.ts";
 import { createHash } from "node:crypto";
 import { Registry, type SearchFilter } from "./registry/registry.ts";
+import { resolveUaid } from "./registry/resolve.ts";
+import { UAID_REGISTRY } from "./protocol/hcs14.ts";
 import { ReputationEngine } from "./registry/reputation.ts";
 import { Dispute, PROTOCOL_VERSION, SettlementReceipt } from "./protocol/schemas.ts";
 import { slug } from "./protocol/describe.ts";
@@ -408,6 +410,7 @@ const server = createServer(async (req, res) => {
         maxPrice: num("maxPrice"), minReputation: num("minReputation"),
         unit: q.get("unit") ?? undefined, network: q.get("network") ?? undefined,
         currency: q.get("currency") ?? undefined, iface: q.get("iface") ?? undefined,
+        uaid: q.get("uaid") ?? undefined,
         live: q.get("live") === "all" ? false : true,
       };
       return json(res, 200, { mx402: PROTOCOL_VERSION, services: registry.search(filter, (id) => reputation.record(id), typicalCharge) });
@@ -444,6 +447,24 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return json(res, 502, { ok: false, error: String(e).split("\n")[0] });
       }
+    }
+    // HCS-14: resolve a Universal Agent ID. The registry is the resolver, and
+    // for uaid:aid it re-derives the hash rather than taking the claim on trust.
+    if (url.pathname.startsWith("/registry/agents/") && req.method === "GET") {
+      const uaid = decodeURIComponent(url.pathname.slice("/registry/agents/".length));
+      const r = resolveUaid(uaid, (u) => registry.byUaid(u)?.descriptor);
+      if (!r.resolved) return json(res, 404, r);
+      const entry = registry.byUaid(uaid)!;
+      return json(res, 200, { ...r, live: entry.live, reputation: reputation.record(entry.descriptor.service_id) });
+    }
+    if (url.pathname === "/registry/agents" && req.method === "GET") {
+      return json(res, 200, {
+        mx402: PROTOCOL_VERSION, registry: UAID_REGISTRY,
+        agents: registry.all().filter((e) => e.descriptor.uaid).map((e) => ({
+          uaid: e.descriptor.uaid, service_id: e.descriptor.service_id, live: e.live,
+          capabilities: e.descriptor.capabilities, endpoint: e.descriptor.endpoint,
+        })),
+      });
     }
     {
       const m = /^\/registry\/services\/([^/]+)(\/reputation|\/disputes)?$/.exec(url.pathname);

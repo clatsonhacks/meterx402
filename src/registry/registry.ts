@@ -12,6 +12,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ServiceDescriptor, type ReputationRecord } from "../protocol/schemas.ts";
 import { fromAtomic, priceAtomic } from "../pricing.ts";
+import { createAid, sameAgent, skillsFor, toHederaCaip10, UAID_REGISTRY } from "../protocol/hcs14.ts";
+import { PROTOCOL_VERSION } from "../protocol/schemas.ts";
 
 export interface RegistryEntry {
   descriptor: ServiceDescriptor;
@@ -31,6 +33,7 @@ export interface SearchFilter {
   network?: string;          // a settlement network the buyer can pay on
   currency?: string;
   iface?: string;            // rest | a2a | mcp | sdk | graphql
+  uaid?: string;             // HCS-14 agent identity (routing params ignored)
   live?: boolean;            // only services answering probes (default true)
 }
 
@@ -75,6 +78,12 @@ export class Registry {
   }
 
   get(id: string) { return this.entries.get(id); }
+  /** Resolve an HCS-14 UAID to the service that claims it. Routing parameters
+   *  (uid, domain, …) are ignored: only the target and hash identify an agent. */
+  byUaid(uaid: string) {
+    for (const e of this.entries.values()) if (e.descriptor.uaid && sameAgent(e.descriptor.uaid, uaid)) return e;
+    return undefined;
+  }
   byLane(lane: string) { for (const e of this.entries.values()) if (e.lane === lane) return e; return undefined; }
   all() { return [...this.entries.values()]; }
   setLive(id: string, live: boolean) { const e = this.entries.get(id); if (e && e.live !== live) { e.live = live; } }
@@ -87,6 +96,7 @@ export class Registry {
     const listings: Listing[] = [];
     for (const e of this.entries.values()) {
       const d = e.descriptor;
+      if (f.uaid && !(d.uaid && sameAgent(d.uaid, f.uaid))) continue;
       if ((f.live ?? true) && !e.live) continue;
       if (f.capability && !d.capabilities.includes(f.capability)) continue;
       if (f.unit && d.pricing.unit !== f.unit) continue;
