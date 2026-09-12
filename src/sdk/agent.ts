@@ -37,6 +37,20 @@ export interface A2AResult {
   paid: boolean;
 }
 
+/** A finished quote round, plus the one action that follows from it. */
+export interface RoundResult {
+  rfq: { rfq_id: string; buyer: string; capability?: string; max_price?: string; max_units?: number; currency: string; binding: boolean };
+  offers: {
+    service_id: string; status: "offered" | "declined" | "no_response"; reason?: string;
+    est_amount: string | null; worst_case: string | null; currency: string; unit: string; rate: string;
+    reputation: number | null; median_latency_ms: number | null; rank: number; quote?: unknown;
+  }[];
+  winner: string | null;
+  why: string;
+  /** Buy from the winner (or whoever you name). */
+  accept(serviceId?: string): Promise<CallResult & { service: string }>;
+}
+
 export class MeterX402Agent {
   readonly mx: MeterX402;
   private tabs = new Map<string, Promise<TabSession>>();
@@ -66,6 +80,30 @@ export class MeterX402Agent {
   }
 
   /** Call a service by id, URL, listing — or by capability, picking the best. */
+  /** Put a job out to quote: state the capability and the ceiling, let every
+   *  live seller answer, then take the winner. Estimates cost nobody anything;
+   *  `binding` asks the shortlist to do the work and quote it exactly. */
+  async rfq(o: { capability?: string; services?: string[]; maxPrice?: string; maxUnits?: number; binding?: boolean; top?: number; request?: CallRequest }): Promise<RoundResult> {
+    const registry = (this.o.registry ?? "http://127.0.0.1:4021").replace(/\/+$/, "");
+    const round = await fetch(`${registry}/rfq`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        buyer: this.mx.accountId, capability: o.capability, service_ids: o.services,
+        max_price: o.maxPrice, max_units: o.maxUnits, currency: this.supports[0]?.currencies?.[0] ?? "HBAR",
+        binding: !!o.binding, top: o.top, request: o.request,
+      }),
+    }).then((r) => r.json() as any);
+
+    const accept = async (serviceId?: string) => {
+      const pick = serviceId ?? round.winner;
+      if (!pick) throw new Error(`no winner: ${round.why}`);
+      const offer = round.offers.find((x: any) => x.service_id === pick);
+      if (!offer || offer.status !== "offered") throw new Error(`${pick} did not offer: ${offer?.reason ?? "not in this round"}`);
+      return this.call(pick, { ...(o.request ?? {}), maxUnits: o.maxUnits }, { maxPrice: o.maxPrice });
+    };
+    return { ...round, accept };
+  }
+
   async call(target: string | Listing | ServiceDescriptor, req: CallRequest = {}, opts: CallOptions = {}): Promise<CallResult & { service: string }> {
     const service = await this.pick(target);
     const remaining = this.remaining;

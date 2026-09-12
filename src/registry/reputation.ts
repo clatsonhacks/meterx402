@@ -45,11 +45,18 @@ interface Stats {
   latencies: number[];
   probesUp: number;
   probes: number;
+  // quote rounds: asked, answered, won. Evidence about whether a seller shows
+  // up to compete, which is not the same as whether it delivers once paid, so
+  // it is reported rather than folded into the weighted score.
+  rfqAsked: number;
+  rfqOffered: number;
+  rfqWon: number;
 }
 
 const blank = (): Stats => ({
   calls: 0, paid: 0, revenue: 0, upstreamCalls: 0, upstreamErrors: 0, sellerFailures: 0,
   settleAttempts: 0, settleFailures: 0, disputes: 0, latencies: [], probesUp: 0, probes: 0,
+  rfqAsked: 0, rfqOffered: 0, rfqWon: 0,
 });
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -117,6 +124,12 @@ export class ReputationEngine {
       case "dispute":
         st.disputes++;
         break;
+      case "quote_round": {
+        st.rfqAsked++;
+        if (d.status === "offered") st.rfqOffered++;
+        if (d.won) st.rfqWon++;
+        break;
+      }
     }
   }
 
@@ -160,6 +173,9 @@ export class ReputationEngine {
         upstream_errors: st.upstreamErrors,
         settle_attempts: st.settleAttempts,
         settle_failures: st.settleFailures,
+        quote_rounds: st.rfqAsked,
+        quotes_offered: st.rfqOffered,
+        quote_rounds_won: st.rfqWon,
         disputes: st.disputes,
         median_latency_ms: median,
         p90_latency_ms: quantile(st.latencies, 0.9),

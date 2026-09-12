@@ -199,7 +199,11 @@ export const ReputationRecord = z.object({
     median_latency_ms: z.number().nullable(),
     p90_latency_ms: z.number().nullable(),
     uptime_ratio: z.number().nullable(),
-  }),
+      // quote rounds this service was asked into, answered, and won
+    quote_rounds: z.number().int().nonnegative().default(0),
+    quotes_offered: z.number().int().nonnegative().default(0),
+    quote_rounds_won: z.number().int().nonnegative().default(0),
+}),
   computed_at: z.number().int(),
   anchor: z.object({ topic_id: z.string(), transaction_id: z.string(), digest: z.string() }).optional(),
 });

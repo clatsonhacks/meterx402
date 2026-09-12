@@ -33,6 +33,7 @@ import { hederaEnabled, ensureTopic, hederaReceipt, resolveOrCreateAccount, look
 import { createHash } from "node:crypto";
 import { Registry, type SearchFilter } from "./registry/registry.ts";
 import { resolveUaid } from "./registry/resolve.ts";
+import { runRound, type Offer, type Rfq, type Round } from "./registry/rfq.ts";
 import { UAID_REGISTRY } from "./protocol/hcs14.ts";
 import { ReputationEngine } from "./registry/reputation.ts";
 import { Dispute, PROTOCOL_VERSION, SettlementReceipt } from "./protocol/schemas.ts";
@@ -219,6 +220,7 @@ function buyer() {
 // ── the playground's buyer: the SDK, so humans see the same lifecycle agents get
 const SELF = `http://127.0.0.1:${HUB_PORT}`;
 const pendingQuotes = new Map<string, import("./sdk/buyer.ts").PendingQuote>();
+const rounds = new Map<string, Round>();   // recent quote rounds, for /rfq/:id
 async function sdkBuyer() {
   const c = await creds();
   if (!c) return null;
@@ -399,6 +401,79 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return json(res, 200, { ok: false, refused: (e as Error)?.name === "BudgetError", error: String((e as Error)?.message ?? e).split("\n")[0] });
       }
+    }
+
+    // ── quote rounds ────────────────────────────────────────────────────
+    // State a job and a ceiling; every live seller with the capability answers
+    // at once. Estimates are free (nothing upstream runs); `binding: true`
+    // asks the shortlist for real 402 quotes, which does do the work.
+    if (req.method === "POST" && url.pathname === "/rfq") {
+      const b = await readBody(req);
+      const rfq: Rfq = {
+        rfq_id: crypto.randomUUID(),
+        buyer: String(b.buyer ?? "anonymous"),
+        capability: b.capability ? String(b.capability) : undefined,
+        service_ids: Array.isArray(b.service_ids) ? b.service_ids.map(String) : undefined,
+        max_price: b.max_price != null ? String(b.max_price) : undefined,
+        max_units: b.max_units != null ? Number(b.max_units) : undefined,
+        currency: String(b.currency ?? "HBAR"),
+        binding: !!b.binding,
+        created_at: Date.now(),
+      };
+      const all = registry.search({ live: false, capability: rfq.capability }, (id) => reputation.record(id), typicalCharge);
+      const candidates = rfq.service_ids?.length ? all.filter((l) => rfq.service_ids!.includes(l.service_id)) : all;
+      const round = runRound(rfq, candidates);
+
+      // A binding round asks the shortlist to actually do the work and quote it.
+      const topN = Math.max(0, Number(b.top ?? 2));
+      if (rfq.binding && topN > 0) {
+        const mx = await sdkBuyer().catch(() => null);
+        if (mx) {
+          const shortlist = round.offers.filter((o) => o.status === "offered").slice(0, topN);
+          await Promise.all(shortlist.map(async (o) => {
+            const t0 = Date.now();
+            try {
+              const q = await mx.quote(o.service_id, { maxUnits: rfq.max_units, ...(b.request ?? {}) });
+              o.ms = Date.now() - t0;
+              if ("pay" in q) {
+                o.quote = q.quote;
+                o.est_amount = q.quote.amount;
+                o.est_units = q.quote.units;
+                pendingQuotes.set(q.quote.quote_id, q);
+                setTimeout(() => pendingQuotes.delete(q.quote.quote_id), Math.max(0, q.quote.expires_at - Date.now()) + 1000).unref?.();
+              } else { o.status = "declined"; o.reason = "nothing billable for this request"; }
+            } catch (e) {
+              o.ms = Date.now() - t0;
+              o.status = "no_response";
+              o.reason = String((e as Error)?.message ?? e).split("\n")[0];
+            }
+          }));
+          // re-score now that some prices are real rather than estimated
+          const rescored = runRound(rfq, candidates.filter((l) => shortlist.some((o) => o.service_id === l.service_id)));
+          for (const o of rescored.offers) {
+            const had = round.offers.find((x) => x.service_id === o.service_id);
+            if (had && had.status === "offered" && had.quote) had.rank = o.rank;
+          }
+          const ranked = round.offers.filter((o) => o.status === "offered").sort((a, b2) => b2.rank - a.rank);
+          round.winner = ranked[0]?.service_id ?? null;
+          round.offers = [...ranked, ...round.offers.filter((o) => o.status !== "offered")];
+        }
+      }
+
+      rounds.set(rfq.rfq_id, round);
+      if (rounds.size > 200) rounds.delete(rounds.keys().next().value!);
+      // every seller asked is evidence, winners and losers alike
+      for (const o of round.offers) {
+        broadcast(mxe("quote_round", registry.get(o.service_id)?.lane ?? o.service_id, rfq.rfq_id, {
+          rfq: rfq.rfq_id, service_id: o.service_id, status: o.status, reason: o.reason,
+          amount: o.est_amount, currency: o.currency, won: round.winner === o.service_id, binding: rfq.binding,
+        }));
+      }
+      return json(res, 200, round);
+    }
+    if (url.pathname.startsWith("/rfq/") && req.method === "GET") {
+      const r = rounds.get(decodeURIComponent(url.pathname.slice("/rfq/".length)));
+      return r ? json(res, 200, r) : json(res, 404, { ok: false, error: "no such round" });
     }
 
     // ── registry ────────────────────────────────────────────────────────
