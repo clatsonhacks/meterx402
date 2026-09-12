@@ -142,10 +142,25 @@ async function loadMine() {
   if (typeof renderActivity === "function" && !$("user-activity").hidden) renderActivity();
 }
 
+/** A balance a person can read: four decimals is plenty for HBAR, and
+ *  0.0254543 in a pill is noise, not information. */
+function balanceText(h) {
+  const n = Number(h);
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (n >= 1) return n.toFixed(2).replace(/\.?0+$/, "");
+  return n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") || "0";
+}
+/** Below this, the wallet says so before a payment fails for it. */
+const LOW_BALANCE = 0.25;
+const isLow = () => W.ok && W.balance != null && W.balance < LOW_BALANCE;
+
 function renderWalletBtn() {
   const el = $("wallet-amt");
   if (!W.ok) { el.textContent = "No wallet"; return; }
-  el.textContent = W.balance != null ? `${fmt(W.balance, 2)} HBAR` : W.mode === "offline" ? "Demo wallet" : "Wallet";
+  el.textContent = W.balance != null ? `${balanceText(W.balance)} HBAR` : W.mode === "offline" ? "Demo wallet" : "Wallet";
+  $("wallet-btn").classList.toggle("low", isLow());
+  $("wallet-btn").title = isLow() ? `Only ${balanceText(W.balance)} HBAR left in the demo wallet` : "Wallet and spending limits";
   $("net-chip").textContent = W.mode === "offline" ? "Offline demo" : "Testnet";
 }
 
@@ -158,7 +173,7 @@ function renderWalletPop() {
   const s = sessionSpent();
   pop.innerHTML = `
     <div class="wp-head"><div><b>Demo wallet</b><div class="label">${W.mode === "offline" ? "Offline demo, simulated money" : "Hedera testnet: test HBAR, no real money"}</div></div></div>
-    <div class="wp-bal">${W.balance != null ? `${fmt(W.balance, 4)} <small>HBAR</small>` : `<small>balance unavailable offline</small>`}</div>
+    <div class="wp-bal">${W.balance != null ? `${balanceText(W.balance)} <small>HBAR</small>` : `<small>balance unavailable offline</small>`}</div>
     ${W.balance != null && usdOf(W.balance) != null ? `<div class="label">≈ ${usdText(usdOf(W.balance))}</div>` : ""}
     <div class="wp-acct mono">${esc(W.account)}${W.hashscan ? ` · <a href="${esc(W.hashscan)}" target="_blank" rel="noopener">HashScan ↗</a>` : ""}</div>
     <div class="wp-spent"><span>Spent this session</span><b>${hbar(s)}</b></div>
@@ -171,6 +186,7 @@ function renderWalletPop() {
       <label class="check"><input type="checkbox" id="lim-auto" ${LIM.autopay ? "checked" : ""}> Pay automatically when a request is under my limit</label>
     </div>
     <div class="label" style="margin-top:8px">Anything above your limit asks you first, and nothing is ever signed above it without your OK.</div>
+    ${isLow() ? `<div class="notice warn wp-low"><b>Running low</b><div>${balanceText(W.balance)} HBAR left. Top the demo wallet up with <span class="mono">npx tsx scripts/fund-buyer.ts</span>, or from the Hedera portal faucet.</div></div>` : ""}
     <button class="ghost" id="wp-activity" style="margin-top:10px;width:100%">See my activity</button>`;
   const save = () => {
     LIM = { perRequest: $("lim-req").value || LIM_DEFAULT.perRequest, session: $("lim-ses").value || LIM_DEFAULT.session, autopay: $("lim-auto").checked };
