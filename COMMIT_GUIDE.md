@@ -1,6 +1,35 @@
-# UI Enhancement Commit Guide
+# Commit Message Guide
 
-This guide helps you commit the UI improvements in logical, atomic commits.
+This guide helps you create clear, descriptive commits following best practices.
+
+## Format
+
+```
+<type>: <short summary>
+
+- Bullet point of change 1
+- Bullet point of change 2
+- Bullet point of change 3
+
+[Optional: Additional context paragraph]
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+```
+
+## Types
+- **feat:** New feature
+- **fix:** Bug fix
+- **docs:** Documentation changes
+- **style:** UI/CSS changes
+- **refactor:** Code restructuring
+- **test:** Adding tests
+- **chore:** Tooling, dependencies, config
+
+---
+
+# UI Enhancement Commits
+
+Examples of commits for UI improvements.
 
 ## Commit 1: Enhance service card visual hierarchy
 
@@ -264,4 +293,130 @@ git show <commit-hash>
 
 # View changes in a file across commits
 git log -p public/consumer.css
+```
+
+---
+
+# Integration & Tooling Commits
+
+Examples of commits for integrations, testing, and tooling.
+
+## Example 1: ChatGPT Integration
+
+```bash
+git add package.json package-lock.json test-chatgpt.mjs openapi-ngrok.json COMMIT_GUIDE.md .gitignore
+git commit -m "$(cat <<'EOF'
+Add ChatGPT integration and testing infrastructure
+
+- Add OpenAI SDK dependency for ChatGPT function calling tests
+- Create test-chatgpt.mjs for testing MeterX402 connector with ChatGPT API
+- Generate openapi-ngrok.json with public HTTPS URL for Custom GPT setup
+- Add COMMIT_GUIDE.md with standardized commit message format
+- Update .gitignore to exclude ngrok binaries and archives
+
+This enables testing the universal connector with ChatGPT through both
+the API (function calling) and Custom GPT UI (via ngrok tunnel).
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+## Example 2: Universal Connector Package
+
+```bash
+git add packages/universal-connector/
+git commit -m "$(cat <<'EOF'
+Create universal connector package for cross-LLM integration
+
+- Implement REST API server with Hono framework
+- Generate OpenAPI 3.1 spec for all LLM platforms
+- Add endpoints: /services, /call, /openapi.json
+- Support Claude, ChatGPT, Gemini, Grok, Perplexity
+- Create comprehensive README with setup guides
+
+Provides single connector that works with all major LLMs instead of
+building separate plugins for each platform.
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+## Example 3: Dependency Updates
+
+```bash
+git add package.json package-lock.json
+git commit -m "$(cat <<'EOF'
+Upgrade dependencies to latest versions
+
+- Update @x402/core from 2.24.0 to 2.25.0
+- Update @hiero-ledger/sdk from 2.84.0 to 2.85.0
+- Update hono from 4.13.5 to 4.13.7
+- Fix peer dependency warnings with @reown/appkit
+
+Addresses security vulnerabilities and improves performance.
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+## Example 4: Testing Infrastructure
+
+```bash
+git add test/ jest.config.js package.json
+git commit -m "$(cat <<'EOF'
+Add unit testing infrastructure with Jest
+
+- Configure Jest for TypeScript and ESM
+- Create test suite for MeterX402 SDK methods
+- Add tests for service discovery and payment flows
+- Implement mock Hedera client for isolated testing
+- Add npm test script and coverage reporting
+
+Enables automated testing and CI/CD integration.
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Quick Reference
+
+### Common Patterns
+
+**New Feature:**
+```bash
+git commit -m "Add [feature name]
+
+- Implementation detail 1
+- Implementation detail 2
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
+```
+
+**Bug Fix:**
+```bash
+git commit -m "Fix [issue description]
+
+- Root cause explanation
+- Solution implemented
+
+Fixes #123
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
+```
+
+**Refactoring:**
+```bash
+git commit -m "Refactor [component/module] for [benefit]
+
+- Change 1
+- Change 2
+- No functional changes
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ```
