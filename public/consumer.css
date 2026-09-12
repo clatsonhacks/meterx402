@@ -124,6 +124,28 @@
 .switch { padding: 3px; gap: 2px; }
 .switch button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 13.5px; font-weight: 600; line-height: 1.2; }
 .switch button svg { width: 14px; height: 14px; flex: none; }
+/* The selected state was --bg-surface on a --bg-inset track: 0.965 against
+   0.955 lightness, which is no difference at all. Which mode you are in is
+   the single most important piece of state on the page, so it gets the
+   accent outright. */
+.switch button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.switch button[aria-pressed="true"] svg { color: #fff; opacity: 0.95; }
+.switch button:not([aria-pressed="true"]):hover { background: var(--bg-elevated); color: var(--text-primary); }
+.switch { background: var(--bg-inset); border-color: var(--border-active); }
+
+/* Same problem one level down: the view tabs. Less shouty than the switch,
+   but it still has to be obvious which one is on. */
+.subnav button[aria-selected="true"] {
+  background: var(--bg-overlay);
+  color: var(--accent);
+  font-weight: 650;
+  box-shadow: var(--shadow-sm);
+}
+.tabs2 button[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
 .topbar-in { min-height: 52px; }
 
 /* The service mark is the first thing read on a card: give it room. */
