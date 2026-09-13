@@ -39,9 +39,12 @@ LLM tokens to plan, pools and lending rates from The Graph and a Uniswap quote, 
 with numbers it paid for. A grounding filter cuts any sentence that brings its own. It can also
 build the swap for a real wallet: approval, Permit2 signature and calldata, never broadcast.
 
-People use it through a web app: a marketplace whose hero replays a real settlement, Try it forms,
-a Playground and a seller dashboard. Agents use the SDK, an MCP server with 12 tools, A2A, or the
-included agent skill.
+People start at a scroll-driven landing page with a live payment globe, then use the web app: a
+marketplace whose hero replays a real settlement, Try it forms, a Playground and a seller dashboard.
+Agents use the SDK, an MCP server with 12 tools, a REST connector with an OpenAPI spec, A2A, or the
+included agent skill. Claude, ChatGPT and VS Code connect in a few guided steps, and each pays from
+the user's own testnet account on their own machine, never from a shared wallet. Everything ships
+as one npm package: `npx mx402`.
 
 ## How it's made
 
@@ -125,6 +128,7 @@ mirror-node verification of every payment.
 | Hedera payments | [HCS receipt topic 0.0.10470327](https://hashscan.io/testnet/topic/0.0.10470327) |
 | Solana devnet, 0.00048 USDC | [Solscan](https://solscan.io/tx/34yVZcY96SnxgjfUh9T28yvDB96Aq5xJw5xv2BVm32LMD9zRuGd78io21FeVDyUVtEeXHB93ntyMsfxbdi7t3omH?cluster=devnet) |
 | Base Sepolia, 0.0005 USDC | [BaseScan](https://sepolia.basescan.org/tx/0x4a2081cb8c497c635aff5211d970a66c2899361733e39693c5e61d2b4593b649) |
+| Published package, end to end with brand-new wallets | `npx mx402` from an empty folder: new seller 0.0.10521862 received 13 payments (+0.0552 HBAR, mirror node) through publish, data, SDK, MCP and the connector; a new Base Sepolia address received 0.00048 USDC ([0x46e3c4b1…](https://sepolia.basescan.org/tx/0x46e3c4b1a96b9d65109798e46fb4b7e9026a13e029c65c5880a623f830d9587f)) |
 | Analyst run: plan, pools, quote, answer for 0.017 HBAR | Hedera txs `0.0.7162784@1789247964.071079545`, `…975.321851525`, `…977.589209659`, `…982.127388281` |
 
 ## Demo video script (about 3 minutes)
@@ -152,7 +156,7 @@ mirror-node verification of every payment.
 ## Links
 
 - **Code:** <https://github.com/clatsonhacks/meterx402>
-- **npm package:** `mx402` ([package README](packages/mx402/README.md))
+- **npm package:** [`mx402`](https://www.npmjs.com/package/mx402) (`npx mx402`), [package README](packages/mx402/README.md)
 - **Agent skill:** [skills/meterx402-onchain-data/SKILL.md](skills/meterx402-onchain-data/SKILL.md)
 - **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md), [docs/architecture.png](docs/architecture.png)
 
@@ -164,7 +168,7 @@ mirror-node verification of every payment.
 ## Pre-existing work
 
 - **This repository's code.** It was written during the event: the first commit is 2026-09-11,
-  and all 62 commits are from 2026-09-11 to 2026-09-13.
+  and every commit is from 2026-09-11 to 2026-09-13.
 - **GlassBox402** (<https://github.com/dhernz/Glassbox402>, open source, not ours). It was the
   reference for the one-command wrapper idea; MeterX402 replaces its flat price with metering.
 - **Other open source.** The x402 packages, the facilitators, and The Graph and Uniswap APIs are

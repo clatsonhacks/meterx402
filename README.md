@@ -8,7 +8,7 @@ the same way.
 
 ![MeterX402 architecture](docs/architecture.png)
 
-[Submission](SUBMISSION.md) · [Architecture](ARCHITECTURE.md) · [Agent skill](skills/meterx402-onchain-data/SKILL.md) · [Uniswap feedback](FEEDBACK.md) · [Status](STATUS.md) · npm: [`mx402`](packages/mx402/README.md)
+[Submission](SUBMISSION.md) · [Architecture](ARCHITECTURE.md) · [Agent skill](skills/meterx402-onchain-data/SKILL.md) · [Uniswap feedback](FEEDBACK.md) · [Status](STATUS.md) · npm: [`mx402`](https://www.npmjs.com/package/mx402)
 
 ---
 
@@ -27,7 +27,8 @@ wraps an API in x402 with one command, with its flat price replaced by metering.
 |---|---|
 | **API sellers** | `npx mx402 <url>` reads your API's response and picks the meter. Get paid in HBAR, HTS tokens, or USDC on Base and Solana. `mx402 data file.csv` sells a dataset per cell. |
 | **People** | A web app with a live marketplace, task-shaped **Try it** forms, a spending limit, and receipts with explorer links. |
-| **AI agents** | An SDK, an MCP server (12 tools), A2A agent cards and an agent skill. Budgets are checked before signing; every response is re-hashed and re-metered after paying. |
+| **AI agents** | An SDK, an MCP server (12 tools), a REST connector with an OpenAPI spec, A2A agent cards and an agent skill. Budgets are checked before signing; every response is re-hashed and re-metered after paying. |
+| **Your AI** | **Connect Claude, ChatGPT or VS Code** in a few steps. Each one pays from the user's own testnet account, on their machine, inside their budget: `npx mx402 mcp` or `npx mx402 connector`. |
 | **Onchain data** | The Graph's standardized DEX and lending subgraphs, queried as one, plus **any subgraph billed per entity**, with no Graph key needed by the buyer. |
 | **Swaps** | Uniswap Trading API quotes sold per call, and swap calldata built for a wallet: approval, Permit2 signature and transaction, never broadcast. |
 | **Hedera-native** | Metered Tabs on allowances, subscriptions as scheduled transactions, HTS tokens with a ledger-taken fee, HCS receipts, HCS-14 agent identity, quote rounds. |
@@ -56,6 +57,19 @@ Each payment also writes a public HCS receipt to
 | Solana devnet | `weather-solana`, 48 forecast hours | 0.00048 USDC | [34yVZcY9…](https://solscan.io/tx/34yVZcY96SnxgjfUh9T28yvDB96Aq5xJw5xv2BVm32LMD9zRuGd78io21FeVDyUVtEeXHB93ntyMsfxbdi7t3omH?cluster=devnet): 480 atomic USDC credited to the seller, slot 497387384 |
 | Base Sepolia | `dex-pools-base`, 10 pools | 0.0005 USDC | [0x4a2081cb…](https://sepolia.basescan.org/tx/0x4a2081cb8c497c635aff5211d970a66c2899361733e39693c5e61d2b4593b649): 500 atomic USDC credited to the seller, block 46740372 |
 
+**From npm, with brand-new wallets.** The published package (`npm i mx402`, identical to the
+tarball tested) run from an empty folder: two new Hedera accounts from `mx402 wallet new`, a new
+Base Sepolia payout address, and every command.
+
+| step | what happened |
+|---|---|
+| `mx402 publish` open-meteo, `mx402 data cities.csv` | seller 0.0.10521862 live and listed; dataset priced per cell |
+| SDK: quote then pay, one-step call, dataset | 48 rows 0.0096 HBAR, 24 rows 0.0048, 6 cells 0.0006; each re-hashed and re-metered; a call above its limit refused |
+| `npx mx402 mcp` from a real MCP client | 12 tools; `get_quote` + `pay_for_service`, `call_service`, `find_lending_markets` paid |
+| `mx402 connector` | paid on Hedera, on Base Sepolia to the new address, and on Solana devnet |
+| `MeterX402Agent.call("weather_forecast")`, `mx402 analyst` | picked by reputation and paid; analyst 4 receipts, 0.012 HBAR |
+| on chain, afterwards | mirror node: 13 payments into the new seller (+0.0552 HBAR); the new Base address holds 0.00048 USDC |
+
 **The Graph and Uniswap**, paid from a Hedera buyer (`npx tsx scripts/live-graph.ts`,
 `mx402 analyst "…"`):
 
@@ -69,6 +83,16 @@ Each payment also writes a public HCS receipt to
 | swap builder on Base | approval needed, Permit2 signed, 954-byte swap calldata, gas limit 97,000, **not sent** | 3 Trading API calls |
 
 ## Quick start
+
+Without cloning anything:
+
+```bash
+npx mx402 check https://api.open-meteo.com/v1/forecast --sample '/?latitude=13&longitude=80&hourly=temperature_2m'
+npx mx402 https://api.open-meteo.com/v1/forecast --wallet 0.0.your-account   # sell it, metered
+npx mx402 mcp                                                                 # give an AI the tools (see Buying)
+```
+
+The whole stack, with the hub, web app and every lane:
 
 ```bash
 npm install
@@ -284,7 +308,11 @@ npx mx402 check https://api.open-meteo.com/v1/forecast --sample '/?latitude=13&l
 npx mx402 https://api.open-meteo.com/v1/forecast --wallet 0.0.1234     # or --chain base-sepolia --wallet 0x…
 npx mx402 publish <url> --wallet <acct>                               # also list it in a registry
 npx mx402 data weather-2026.csv --wallet 0.0.1234                     # a dataset, priced per cell
+npx mx402 wallet token-account --chain solana-devnet --owner <addr>   # a new Solana payout wallet's USDC account
 ```
+
+A Solana wallet that has never held USDC cannot be paid until it has a USDC token account. The
+gateway checks at start and prints this command when it is missing.
 
 | Your API returns | Metered as |
 |---|---|
@@ -417,7 +445,7 @@ docs/                  architecture diagram
 ## Testing
 
 ```bash
-npm test                          # 219 tests: 164 unit + 55 end-to-end
+npm test                          # 221 tests: 166 unit + 55 end-to-end
 npm run test:live                 # real Hedera testnet, mirror-node verified
 npx tsx scripts/live-chains.ts    # USDC payments on Base Sepolia and Solana devnet
 npx tsx scripts/live-graph.ts     # lending, any subgraph, a free failed query, DEX fallbacks
@@ -428,7 +456,7 @@ The end-to-end suite is not mocked at the protocol level. It signs real Hedera t
 transactions with the official `@x402` client and settles them against a mock facilitator that
 decodes each one and checks payer, payTo, amount, fee payer, signature and replay. It covers
 tampering, replay, expiry, insufficient funds, caps, budgets, tab batching, revocation and
-streaming. The unit tests cover the Graph fan-out, fallbacks, lending, entity metering, the
+streaming. The connector tests check that everything except its spec needs the bearer token. The unit tests cover the Graph fan-out, fallbacks, lending, entity metering, the
 analyst's planner, facts and grounding filter, and the swap builder, including recovering the
 Permit2 signer.
 
@@ -437,8 +465,11 @@ Permit2 signer.
 - **Testnets only.** No mainnet keys belong in `.env`, and the swap builder never broadcasts.
 - **The resource server holds no buyer key.** Buyers sign; facilitators settle; settlements are
   re-checked on chain.
-- **`/deploy` and `/playground` are loopback-only.** They are the web app's backend; anyone can
-  read the registry.
+- **`/deploy` and `/playground` are loopback-only.** They are the web app's backend, and the only
+  place the demo wallet pays; anyone can read the registry.
+- **Connected AIs never use the demo wallet.** `mx402 mcp` and `mx402 connector` sign with the
+  user's own key where they run. The connector refuses every call except `/health` and
+  `/openapi.json` without its bearer token, because a tunnel makes it public.
 - **Standardized subgraph coverage varies.** In our runs Base, Optimism and BSC Uniswap v3
   deployments timed out or had failing indexers. Fallbacks and the per-source report make that
   visible rather than silent.

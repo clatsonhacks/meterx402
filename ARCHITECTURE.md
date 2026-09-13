@@ -285,3 +285,29 @@ Facts are computed in code, the LLM's JSON plan is validated against a rules pla
 `groundProse()` removes any sentence whose numbers are not in the paid data.
 `prepareSwap()` (`src/graph/swap.ts`) turns a quote into unsigned transactions for a wallet
 (approval, Permit2 signature, `/swap` calldata) and never broadcasts.
+
+## 13. Connected AIs and distribution
+
+The web app's demo wallet pays only for calls made in the browser (`/playground` is loopback-only).
+Every other client signs where it runs, with the user's own key, inside `BUYER_BUDGET`:
+
+| Client | Path | Code |
+|---|---|---|
+| Claude Desktop, Claude Code, VS Code Copilot, Cursor | MCP over stdio: `npx -y mx402 mcp` | `src/mcp.ts` |
+| ChatGPT Custom GPT Actions, function-calling LLMs | `npx mx402 connector`: REST + OpenAPI 3.1 behind a bearer token, exposed with a tunnel | `src/connector.ts` |
+| MeterX402 VS Code extension | discovery and publishing from the hub; paying through the user's connector (token in VS Code secret storage) | `vscode-extension/src` |
+
+The connector picks a wallet per settlement family from the service's descriptor (Hedera
+`BUYER_ACCOUNT_ID`/`BUYER_PRIVATE_KEY`, `BUYER_EVM_PRIVATE_KEY` for `eip155:*`,
+`BUYER_SOLANA_SECRET_KEY` for `solana:*`) and returns the service's or facilitator's reason when a
+call is not paid. The app's guides (`public/connect.js`, `/app?connect=claude|chatgpt|vscode`) fill
+in the hub URL and always start with the user's own account.
+
+A Solana wallet that has never held USDC has no token account, so an SPL transfer to it fails
+simulation. The gateway checks the payout wallet at start (`solanaUsdcAccount`) and
+`mx402 wallet token-account` creates the account (`createSolanaUsdcAccount`,
+`src/settlement/verify-chains.ts`).
+
+`mx402` is published on npm as one bundled CLI and SDK (`scripts/build-cli.mjs`); the EVM and Solana
+signers are optional dependencies loaded only when used. The landing page (`landing/`, Vite, React,
+React Three Fiber, GSAP) builds to `public/landing`; the hub serves it at `/` and the app at `/app`.
