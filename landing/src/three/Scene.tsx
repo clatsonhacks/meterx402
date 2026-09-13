@@ -18,11 +18,15 @@ interface SceneProps {
 }
 
 const PALETTE = {
-  light: { edge: "#d8d4c7", center: "#fbf9f3", rim: "#7c83f0", rimAmt: 0.38, dots: "#8f897b", halo: "#7a80f0", haloAmt: 0.2, arcStart: "#4c6ef5", coin: "#6d5ce8", face: "#faf8f2", faceInk: "#2d2b66", paid: "#1a9e6a", ring: "#b9b3a2" },
-  dark: { edge: "#0d0d14", center: "#272638", rim: "#6f7bff", rimAmt: 0.55, dots: "#8986a6", halo: "#6d74ff", haloAmt: 0.36, arcStart: "#6f8bff", coin: "#8f86ff", face: "#1d1c2c", faceInk: "#dcd9ff", paid: "#3ccf93", ring: "#45445c" },
+  // Claude light: ivory paper, oat shading, warm grey ink, a clay accent
+  light: { edge: "#e3dfd2", center: "#fdfcf8", rim: "#d97757", rimAmt: 0.2, dots: "#a19e94", halo: "#d97757", haloAmt: 0.13, arcStart: "#b3ab9c", coin: "#d97757", glow: "#c6613f", face: "#faf9f5", faceInk: "#141413", paid: "#6b8a4e", ring: "#cdc8ba", light: "#f3c3ae" },
+  dark: { edge: "#0d0d14", center: "#272638", rim: "#6f7bff", rimAmt: 0.55, dots: "#8986a6", halo: "#6d74ff", haloAmt: 0.36, arcStart: "#6f8bff", coin: "#8f86ff", glow: "#4c3fd6", face: "#1d1c2c", faceInk: "#dcd9ff", paid: "#3ccf93", ring: "#45445c", light: "#8f86ff" },
 } as const;
 
-const RING_COLORS = ["#6f4cff", "#ff007a", "#2ebac6", "#00d395", "#f5a524", "#4c6ef5"];
+const RING_COLORS = {
+  light: ["#d97757", "#788c5d", "#6a9bcc", "#c46686", "#d4a27f", "#9e9bbf"],
+  dark: ["#6f4cff", "#ff007a", "#2ebac6", "#00d395", "#f5a524", "#4c6ef5"],
+};
 
 const toVec = (lat: number, lon: number, r = 1) => {
   const a = THREE.MathUtils.degToRad(lat), b = THREE.MathUtils.degToRad(lon);
@@ -78,7 +82,7 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
   const coin = useRef<THREE.Group>(null!);
   const coinFlip = useRef<THREE.Group>(null!);
   const ring = useRef<THREE.Group>(null!);
-  const cur = useRef({ x: 0.47, y: 0, scale: 1, opacity: 1, coin: 0, ring: 0, spin: 0.62, tilt: 0.32, flip: 0 });
+  const cur = useRef({ x: 0.47, y: 0, scale: 1, opacity: 1, coin: 0, ring: 0, spin: 0.62, tilt: 0.32, flip: 0, halo: PALETTE[mode].haloAmt as number });
   const ready = useRef(false);
 
   // ── materials whose colours follow the theme ──
@@ -97,7 +101,7 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
     uniforms: { uColor: { value: new THREE.Color(P0.halo) }, uAmt: { value: P0.haloAmt } },
   }), []);
   const dotMat = useMemo(() => new THREE.MeshBasicMaterial({ color: P0.dots, side: THREE.DoubleSide, transparent: true }), []);
-  const coinMat = useMemo(() => new THREE.MeshStandardMaterial({ color: P0.coin, metalness: 0.4, roughness: 0.32, emissive: new THREE.Color("#4c3fd6"), emissiveIntensity: 0 }), []);
+  const coinMat = useMemo(() => new THREE.MeshStandardMaterial({ color: P0.coin, metalness: 0.4, roughness: 0.32, emissive: new THREE.Color(P0.glow), emissiveIntensity: 0 }), []);
   const lastFade = useRef(-1);
   const ringMat = useMemo(() => new THREE.MeshBasicMaterial({ color: P0.ring, transparent: true, opacity: 0.6 }), []);
   const boxMat = useMemo(() => new THREE.MeshStandardMaterial({ metalness: 0.2, roughness: 0.45 }), []);
@@ -133,13 +137,14 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
       const seg = 72, rad = 6;
       const geo = new THREE.TubeGeometry(curve, seg, 0.0042, rad, false);
       const colors = new Float32Array((seg + 1) * (rad + 1) * 3);
-      const s = new THREE.Color(PALETTE[mode].arcStart), e = new THREE.Color(chain.glow);
+      const glow = mode === "light" ? chain.glowLight : chain.glow;
+      const s = new THREE.Color(PALETTE[mode].arcStart), e = new THREE.Color(glow);
       for (let u = 0; u <= seg; u++) {
         const c = s.clone().lerp(e, u / seg);
         for (let v = 0; v <= rad; v++) { const k = (u * (rad + 1) + v) * 3; colors[k] = c.r; colors[k + 1] = c.g; colors[k + 2] = c.b; }
       }
       geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-      return { key: `${r.id}-${i}`, curve, geo, glow: chain.glow, from: a, phase: (i * 0.29) % 1 };
+      return { key: `${r.id}-${i}`, curve, geo, glow, from: a, phase: (i * 0.29) % 1 };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiptKey, mode]);
@@ -178,7 +183,7 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
     return { front: draw(false), back: draw(true) };
   }, [mode]);
   useEffect(() => () => { faces.front.dispose(); faces.back.dispose(); }, [faces]);
-  useEffect(() => { lastFade.current = -1; }, [arcs, dots]);
+  useEffect(() => { lastFade.current = -1; }, [arcs, dots, mode]);
 
   const ringCount = 30;
   const ringBoxes = useMemo(() => {
@@ -187,14 +192,15 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
     const color = new THREE.Color();
     for (let i = 0; i < ringCount; i++) {
       const a = (i / ringCount) * Math.PI * 2;
-      dummy.position.set(Math.cos(a) * 1.34, Math.sin(a * 3) * 0.05, Math.sin(a) * 1.34);
+      dummy.position.set(Math.cos(a) * 1.28, Math.sin(a * 3) * 0.05, Math.sin(a) * 1.28);
       dummy.rotation.set(a, a * 2, 0);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, color.set(RING_COLORS[i % RING_COLORS.length]));
+      mesh.setColorAt(i, color.set(RING_COLORS[mode][i % RING_COLORS[mode].length]));
     }
     return mesh;
-  }, [boxMat]);
+  }, [boxMat, mode]);
+  useEffect(() => () => { ringBoxes.geometry.dispose(); ringBoxes.dispose(); }, [ringBoxes]);
 
   // keep rendering on demand when motion is reduced
   useEffect(() => {
@@ -212,13 +218,17 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
     const d = Math.min(dt, 0.05);
     const k = 1 - Math.pow(0.0015, d);
     const narrow = size.width < 900;
+    // phones stack everything in one column: the globe sits above the hero copy
+    // and returns as the closing horizon, and never sits behind text
     const tx = narrow ? 0 : t.x;
-    const ty = narrow ? (t.key === "hero" ? 0.3 : t.y * 0.5) : t.y;
-    const topacity = narrow ? t.opacity * 0.5 : t.opacity;
+    const ty = narrow ? (t.key === "hero" ? 0.42 : t.key === "cta" ? -1.5 : t.y) : t.y;
+    const topacity = narrow ? (t.key === "hero" ? 1 : t.key === "cta" ? 0.7 : 0) : t.opacity;
+    const tscale = narrow ? (t.key === "hero" ? 0.85 : t.key === "cta" ? 2.6 : t.scale) : t.scale;
     const c = cur.current;
     c.x += (tx - c.x) * k; c.y += (ty - c.y) * k;
-    c.scale += ((narrow ? t.scale * 1.05 : t.scale) - c.scale) * k;
-    c.opacity += (topacity - c.opacity) * k;
+    c.scale += (tscale - c.scale) * k;
+    // fade out quicker than it moves, so it never lingers behind content
+    c.opacity += (topacity - c.opacity) * (topacity < c.opacity ? 1 - Math.pow(0.00005, d) : k);
     c.coin += ((narrow ? 0 : t.coin) - c.coin) * k;
     c.ring += (t.ring - c.ring) * k;
 
@@ -254,7 +264,8 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
     sphereMat.uniforms.uRimAmt.value += (p.rimAmt - sphereMat.uniforms.uRimAmt.value) * e;
     (haloMat.uniforms.uColor.value as THREE.Color).lerp(tmp.col.set(p.halo), e);
     const fade = Math.min(1, c.opacity);
-    haloMat.uniforms.uAmt.value += (p.haloAmt * fade - haloMat.uniforms.uAmt.value) * e;
+    c.halo += (p.haloAmt - c.halo) * e;
+    haloMat.uniforms.uAmt.value = c.halo * fade;
     if (Math.abs(fade - lastFade.current) > 0.003) {
       lastFade.current = fade;
       sphereMat.uniforms.uAlpha.value = fade;
@@ -299,7 +310,8 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
     const flipTarget = stepIndex >= 3 ? Math.PI : 0;
     c.flip += (flipTarget - c.flip) * (1 - Math.pow(0.004, d));
     coinFlip.current.rotation.y = c.flip;
-    coinMat.emissiveIntensity += ((stepIndex === 4 ? 0.55 : 0) - coinMat.emissiveIntensity) * k;
+    coinMat.emissive.lerp(tmp.col.set(p.glow), e);
+    coinMat.emissiveIntensity += ((stepIndex === 4 ? 0.5 : 0) - coinMat.emissiveIntensity) * k;
 
     // the subgraph ring orbits the globe
     ring.current.position.copy(globe.current.position);
@@ -332,7 +344,7 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
     <>
       <ambientLight intensity={0.8} />
       <directionalLight position={[3, 4, 5]} intensity={1.7} />
-      <pointLight position={[-3, -2, 3]} intensity={6} distance={12} color="#8f86ff" />
+      <pointLight position={[-3, -2, 3]} intensity={6} distance={12} color={PALETTE[mode].light} />
 
       <group ref={globe}>
         <mesh material={sphereMat} renderOrder={-1}><sphereGeometry args={[0.995, 96, 96]} /></mesh>
@@ -342,7 +354,7 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
         {arcs.map((arc, i) => (
           <group key={arc.key}>
             <mesh geometry={arc.geo} material={arcMat} />
-            <mesh position={arc.from}><sphereGeometry args={[0.012, 12, 12]} /><meshBasicMaterial color="#4c6ef5" transparent /></mesh>
+            <mesh position={arc.from}><sphereGeometry args={[0.012, 12, 12]} /><meshBasicMaterial color={PALETTE[mode].arcStart} transparent /></mesh>
             <group ref={(g) => { cometRefs.current[i] = g; }}>
               {Array.from({ length: 7 }, (_, j) => (
                 <sprite key={j} scale={j === 0 ? 0.13 : 0.075 - j * 0.007}>
@@ -355,8 +367,9 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
 
         {CHAINS.map((c, i) => (
           <group key={c.key} position={nodeLocal[i]}>
-            <sprite scale={0.34}><spriteMaterial map={glowTex()} color={c.glow} transparent opacity={0.5} depthWrite={false} /></sprite>
-            <sprite scale={0.14}><spriteMaterial map={glowTex()} color={c.glow} transparent opacity={0.9} depthWrite={false} /></sprite>
+            {/* userData.base: the unfaded opacity, since it changes with the theme */}
+            <sprite scale={0.3}><spriteMaterial map={glowTex()} color={mode === "light" ? c.glowLight : c.glow} transparent opacity={mode === "light" ? 0.3 : 0.5} userData={{ base: mode === "light" ? 0.3 : 0.5 }} depthWrite={false} /></sprite>
+            <sprite scale={0.13}><spriteMaterial map={glowTex()} color={mode === "light" ? c.glowLight : c.glow} transparent opacity={mode === "light" ? 0.65 : 0.9} userData={{ base: mode === "light" ? 0.65 : 0.9 }} depthWrite={false} /></sprite>
             <mesh ref={(m) => { coreRefs.current[i] = m; }}><sphereGeometry args={[0.024, 20, 20]} /><meshBasicMaterial color={mode === "dark" ? c.coreDark : c.core} transparent /></mesh>
           </group>
         ))}
@@ -373,7 +386,7 @@ function Rig({ mode, receipts, labels, onReady }: SceneProps) {
       </group>
 
       <group ref={ring}>
-        <mesh material={ringMat} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[1.34, 0.004, 8, 160]} /></mesh>
+        <mesh material={ringMat} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[1.28, 0.004, 8, 160]} /></mesh>
         <primitive object={ringBoxes} />
       </group>
     </>

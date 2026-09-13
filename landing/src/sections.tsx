@@ -271,7 +271,51 @@ export function Sellers() {
   );
 }
 
-// ── 8. proof ─────────────────────────────────────────────────────────────
+// ── 8. wallets ───────────────────────────────────────────────────────────
+const WALLETS = [
+  {
+    who: "Trying it here",
+    title: "No wallet to connect",
+    text: "The app pays from a shared testnet demo wallet (test HBAR, no real money). You set the most you'll pay per request and per session, and anything above that asks you first.",
+    foot: <a href={APP}>Open the app</a>,
+  },
+  {
+    who: "Your agent or app",
+    title: "Bring your own key",
+    text: "The SDK, CLI and MCP server sign with your own testnet key: a Hedera account, an EVM key for Base Sepolia, or a Solana keypair. The budget is checked before anything is signed.",
+    foot: <code>new MeterX402({"{ wallet, budget }"})</code>,
+  },
+  {
+    who: "Selling an API",
+    title: "Just a payout account",
+    text: "Tell mx402 where to be paid. Each buyer's payment settles straight to that account through the x402 facilitator; MeterX402 never holds the money.",
+    foot: <code>--wallet 0.0.1234</code>,
+  },
+];
+
+export function Wallets() {
+  return (
+    <section id="wallet" className="section wallets" data-stage="wallet">
+      <div className="container">
+        <Eyebrow>Wallets</Eyebrow>
+        <h2 className="reveal">Do I need to connect a wallet?</h2>
+        <p className="reveal muted wallets-lede">Not to try it. A wallet only matters once you pay from your own account or get paid for yours.</p>
+        <div className="wallet-cards">
+          {WALLETS.map((w) => (
+            <article key={w.who} className="wallet-card glass reveal">
+              <span className="who">{w.who}</span>
+              <h3>{w.title}</h3>
+              <p>{w.text}</p>
+              <div className="wallet-foot">{w.foot}</div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── 9. proof ─────────────────────────────────────────────────────────────
 export function Proof() {
   const { receipts, titleFor } = useLive();
   const items = receipts.slice(0, 18);
@@ -310,13 +354,13 @@ export function Proof() {
   );
 }
 
-// ── 9. get started ───────────────────────────────────────────────────────
+// ── 10. get started ──────────────────────────────────────────────────────
 export function FinalCta() {
   return (
     <section id="get-started" className="section final" data-stage="cta">
       <div className="container final-in">
         <h2 className="reveal">Stop paying for calls.<br /><span className="grad">Pay for what they return.</span></h2>
-        <p className="reveal">Explore live services, try one in your browser, or connect your agent. Testnet only, nothing to install.</p>
+        <p className="reveal">Explore live services, try one in your browser, or connect your agent. Testnet only: no wallet to connect, nothing to install.</p>
         <div className="cta-row center reveal">
           <a className="btn primary lg" href={APP}>Get started</a>
           <a className="btn ghost lg" href={REPO} target="_blank" rel="noopener">Read the code</a>

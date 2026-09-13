@@ -3,7 +3,7 @@ import { CHAINS } from "./chains";
 import { Footer, Nav } from "./components";
 import { LiveProvider, useLive } from "./data";
 import { useScrollScenes } from "./scroll";
-import { Agents, Chains, Data, FinalCta, Hero, HowItWorks, Problem, Proof, Sellers } from "./sections";
+import { Agents, Chains, Data, FinalCta, Hero, HowItWorks, Problem, Proof, Sellers, Wallets } from "./sections";
 import { useTheme } from "./theme";
 
 // Three.js and the scene arrive as their own chunk, after first paint
@@ -64,6 +64,7 @@ function Page() {
         <Data />
         <Agents />
         <Sellers />
+        <Wallets />
         <Proof />
         <FinalCta />
       </main>

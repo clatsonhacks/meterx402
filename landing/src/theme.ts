@@ -34,7 +34,7 @@ export function setPref(p: ThemePref) {
     if (p === "system") localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, p);
   } catch {}
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolveMode(p) === "dark" ? "#1a1a20" : "#f5f4ee");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolveMode(p) === "dark" ? "#131219" : "#faf9f5");
   emit();
 }
 

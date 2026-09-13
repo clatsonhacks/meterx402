@@ -9,7 +9,7 @@ import { useLayoutEffect, type RefObject } from "react";
 
 gsap.registerPlugin(ScrollTrigger);
 
-export type StageKey = "hero" | "problem" | "how" | "chains" | "data" | "agents" | "sellers" | "proof" | "cta";
+export type StageKey = "hero" | "problem" | "how" | "chains" | "data" | "agents" | "sellers" | "wallet" | "proof" | "cta";
 
 export interface StageTarget {
   key: StageKey;
@@ -24,16 +24,20 @@ export interface StageTarget {
   focusChain: number;
 }
 
+// The globe only shows where the layout leaves it an empty column (hero,
+// chains, data, the closing horizon). Where cards fill the width it fades out
+// entirely, drifting towards where it reappears, and stops drawing.
 export const TARGETS: Record<StageKey, StageTarget> = {
   hero: { key: "hero", x: 0.47, y: -0.02, scale: 1, opacity: 1, spin: 1, coin: 0, ring: 0, focusChain: -1 },
-  problem: { key: "problem", x: 0.82, y: 0.1, scale: 0.72, opacity: 0.4, spin: 1, coin: 0, ring: 0, focusChain: -1 },
-  how: { key: "how", x: -0.98, y: -0.85, scale: 0.8, opacity: 0.22, spin: 0.6, coin: 1, ring: 0, focusChain: -1 },
+  problem: { key: "problem", x: 0.95, y: 0, scale: 0.8, opacity: 0, spin: 1, coin: 0, ring: 0, focusChain: -1 },
+  how: { key: "how", x: 0.95, y: 0, scale: 0.8, opacity: 0, spin: 0.6, coin: 1, ring: 0, focusChain: -1 },
   chains: { key: "chains", x: 0.47, y: -0.02, scale: 0.98, opacity: 1, spin: 0, coin: 0, ring: 0, focusChain: 0 },
-  data: { key: "data", x: -0.63, y: 0, scale: 0.7, opacity: 1, spin: 0.8, coin: 0, ring: 1, focusChain: -1 },
-  agents: { key: "agents", x: 0.86, y: 0.5, scale: 0.46, opacity: 0.3, spin: 1, coin: 0, ring: 0.3, focusChain: -1 },
-  sellers: { key: "sellers", x: -0.86, y: -0.5, scale: 0.46, opacity: 0.3, spin: 1, coin: 0, ring: 0, focusChain: -1 },
-  proof: { key: "proof", x: 0.92, y: 0.62, scale: 0.42, opacity: 0.28, spin: 1, coin: 0, ring: 0, focusChain: -1 },
-  cta: { key: "cta", x: 0, y: -1.62, scale: 2, opacity: 0.65, spin: 1, coin: 0, ring: 0, focusChain: -1 },
+  data: { key: "data", x: -0.66, y: 0, scale: 0.7, opacity: 1, spin: 0.8, coin: 0, ring: 1, focusChain: -1 },
+  agents: { key: "agents", x: -0.95, y: 0, scale: 0.7, opacity: 0, spin: 1, coin: 0, ring: 0, focusChain: -1 },
+  sellers: { key: "sellers", x: 0, y: -1.62, scale: 2, opacity: 0, spin: 1, coin: 0, ring: 0, focusChain: -1 },
+  wallet: { key: "wallet", x: 0, y: -1.62, scale: 2, opacity: 0, spin: 1, coin: 0, ring: 0, focusChain: -1 },
+  proof: { key: "proof", x: 0, y: -1.62, scale: 2, opacity: 0, spin: 1, coin: 0, ring: 0, focusChain: -1 },
+  cta: { key: "cta", x: 0, y: -1.62, scale: 2, opacity: 0.8, spin: 1, coin: 0, ring: 0, focusChain: -1 },
 };
 
 /** `chainFocus` is written by the Chains section; the globe turns to it while `target.focusChain` ≥ 0. */
@@ -66,7 +70,8 @@ export function useScrollScenes() {
         const key = el.dataset.stage as StageKey;
         ScrollTrigger.create({
           trigger: el,
-          start: "top 60%",
+          // the closing horizon rises only once the proof cards have scrolled away
+          start: key === "cta" ? "top 40%" : "top 60%",
           end: "bottom 40%",
           onToggle: (self) => {
             if (self.isActive) stage.target = { ...TARGETS[key] };
