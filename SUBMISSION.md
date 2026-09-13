@@ -131,27 +131,30 @@ mirror-node verification of every payment.
 | Published package, end to end with brand-new wallets | `npx mx402` from an empty folder: new seller 0.0.10521862 received 13 payments (+0.0552 HBAR, mirror node) through publish, data, SDK, MCP and the connector; a new Base Sepolia address received 0.00048 USDC ([0x46e3c4b1…](https://sepolia.basescan.org/tx/0x46e3c4b1a96b9d65109798e46fb4b7e9026a13e029c65c5880a623f830d9587f)) |
 | Analyst run: plan, pools, quote, answer for 0.017 HBAR | Hedera txs `0.0.7162784@1789247964.071079545`, `…975.321851525`, `…977.589209659`, `…982.127388281` |
 
-## Demo video script (about 3 minutes)
+## Demo video script (3:00)
 
-1. **0:00–0:20, the problem.** A flat x402 price charges a 5-word and a 200-word answer the same.
-   Show the Explore bento: 289 tokens for 0.00289 HBAR against a flat 0.04.
-2. **0:20–0:50, the hero.** Explore replays a real settlement: units count up, the 402 quote, paid,
-   settled, and a HashScan link. Point at the live stats and the receipts ticker, and the three
-   chains.
-3. **0:50–1:20, Try it: lending rates.** Open "Lending Rates Everywhere", pick USDC and "Earn on a
-   deposit". The price is shown before paying. Pay, then show the table and the coverage chips
-   (15/15 subgraphs). Open "Any Subgraph, Per Entity": run a preset for 9 entities, then a broken
-   query for nothing.
-4. **1:20–2:10, the DEX analyst.** In the Playground, ask "Where should USDC earn the most right
-   now: lending it, or providing liquidity against ETH?" Walk through the four paid steps with
-   receipts, the facts (fee APR against lending rate), and the grounded answer. Click "Build this
-   swap for my wallet": approval, Permit2 signed, calldata, nothing sent.
-5. **2:10–2:35, agents.** Claude Desktop with `npx mx402 mcp`: `find_lending_markets`, then
-   `query_subgraph`, each paid with a receipt. Mention SKILL.md.
-6. **2:35–2:55, multichain.** `npx tsx scripts/live-chains.ts` pays in USDC on Solana devnet and
-   Base Sepolia. Open the Solscan and BaseScan links; the seller was credited on chain.
-7. **2:55–3:10, sellers.** `npx mx402 check <url>` shows the detected meter and flat against
-   metered. The Deployer dashboard is violet, with the price spread chart.
+The story in one line: **a taxi meter for APIs.** Use case first, then real transactions, then
+connectors.
+
+1. **0:00–0:20, the use case.** A taxi charges for distance, not a flat price per ride; APIs charge
+   a five-word and a five-page answer the same. MeterX402 charges for what each call returns.
+   Landing page: the globe, the receipt card, the flat-versus-metered bars (289 tokens for 0.00289
+   HBAR against a flat 0.04).
+2. **0:20–0:40, four steps.** Meter, quote, pay inside your limit, receipt. Scroll "How a call is
+   paid" until the coin flips to PAID. Say "testnet" once.
+3. **0:40–1:20, a real payment.** /app → Weather → Try it: Today is 24 rows for 0.0024 HBAR, pay,
+   open the HashScan link; 2 days is 48 rows for 0.0048, exactly double. Set a 0.003 limit: a week
+   asks before paying.
+4. **1:20–1:50, an agent that pays for itself.** Playground → Ask the DEX analyst: plan, The Graph
+   pools and lending, Uniswap quote, answer. Four receipts, 0.012 HBAR, only numbers it paid for.
+5. **1:50–2:05, three chains.** The landing page's globe turns to Hedera, Base, Solana; BaseScan and
+   Solscan tabs for the USDC settlements in Proof.
+6. **2:05–2:22, sellers.** `npx mx402 check <url>` suggests the meter and the price; the Deployer
+   dashboard shows income.
+7. **2:22–2:52, connectors.** Explore → "Use it from your AI" → Connect Claude (your own account,
+   never ours). In Claude Desktop: quote first, approve, `pay_for_service`, the receipt in the
+   chat. Flash the ChatGPT and VS Code guides (`npx mx402 connector`).
+8. **2:52–3:00, close.** "Pay per use, not per call. `npx mx402`."
 
 ## Links
 
