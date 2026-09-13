@@ -1,4 +1,4 @@
-// src/server.ts
+// packages/universal-connector/src/server.ts
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
@@ -61,30 +61,11 @@ app.post("/call", async (c) => {
     maxUnits: max_units,
     maxPrice: max_price
   };
-  try {
-    const response = await fetch(`${HUB_URL}/call/${encodeURIComponent(service_id)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(callPayload)
-    });
-    const result = await response.json();
-    return c.json({
-      success: true,
-      data: result.data,
-      receipt: result.receipt ? {
-        amount: result.receipt.amount,
-        currency: result.receipt.currency,
-        units: result.receipt.metered_units,
-        unit_type: result.receipt.unit,
-        transaction_id: result.receipt.transaction_id
-      } : null
-    });
-  } catch (error) {
-    return c.json({
-      success: false,
-      error: error.message
-    }, 500);
-  }
+  void callPayload;
+  return c.json({
+    success: false,
+    error: "Paying needs your own testnet wallet. Run `npx mx402 connector` with BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY set: it serves this API (with /quote, /pay and /call) and signs with your key, inside your budget."
+  }, 501);
 });
 app.get("/openapi.json", async (c) => {
   return c.json({

@@ -33,13 +33,19 @@ npm run package
 # Then: Extensions → Install from VSIX → select meterx402-0.1.0.vsix
 ```
 
-### 3. Configure (Optional)
+### 3. Start your connector (pays with your own account)
 
-Go to VSCode Settings and search for "meterx402":
+Add your own Hedera testnet account (free at portal.hedera.com) to your workspace `.env`:
 
-- **Hub URL**: `http://localhost:4021` (default)
-- **Buyer Account ID**: Your Hedera testnet account (optional)
-- **Max Per Call**: `0.1` HBAR (default spending limit)
+```
+BUYER_ACCOUNT_ID=0.0.your-account
+BUYER_PRIVATE_KEY=your-testnet-private-key
+BUYER_BUDGET=1 HBAR
+```
+
+Then run **MeterX402: Start My Connector** from the Command Palette. Calls are paid through it,
+from your account, inside your budget. Settings (search "meterx402"): Hub URL
+(`http://localhost:4021`), Connector URL (`http://localhost:3402`), Max Per Call.
 
 ## Using the Extension
 

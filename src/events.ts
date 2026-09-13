@@ -39,7 +39,7 @@ export interface MXEvent {
 // PORT is what a PaaS hands us; 4021 stays the local default. Gateways reach
 // the hub over loopback, and MX_HUB overrides that when they run elsewhere.
 export const HUB_PORT = Number(process.env.PORT ?? process.env.MX_HUB_PORT ?? 4021);
-export const HUB_URL = process.env.MX_HUB ?? `http://127.0.0.1:${HUB_PORT}`;
+export const HUB_URL = process.env.MX_HUB ?? process.env.HUB_URL ?? `http://127.0.0.1:${HUB_PORT}`;
 
 export function mxe(type: MXEventType, lane: string, reqId: string, data: Record<string, unknown> = {}): MXEvent {
   return { id: crypto.randomUUID(), reqId, lane, type, t: Date.now(), data };

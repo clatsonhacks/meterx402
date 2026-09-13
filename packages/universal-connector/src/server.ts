@@ -82,33 +82,14 @@ app.post('/call', async (c) => {
     maxPrice: max_price
   };
 
-  try {
-    // Use the SDK to make the call (simplified - in real implementation would use MeterX402 SDK)
-    const response = await fetch(`${HUB_URL}/call/${encodeURIComponent(service_id)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(callPayload)
-    });
-
-    const result = await response.json();
-
-    return c.json({
-      success: true,
-      data: result.data,
-      receipt: result.receipt ? {
-        amount: result.receipt.amount,
-        currency: result.receipt.currency,
-        units: result.receipt.metered_units,
-        unit_type: result.receipt.unit,
-        transaction_id: result.receipt.transaction_id
-      } : null
-    });
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message
-    }, 500);
-  }
+  // Paying needs the caller's own wallet, which this discovery-only server does
+  // not hold (and must never borrow from a hub). `npx mx402 connector` serves
+  // the same kind of API and signs with the user's own BUYER_* key.
+  void callPayload;
+  return c.json({
+    success: false,
+    error: 'Paying needs your own testnet wallet. Run `npx mx402 connector` with BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY set: it serves this API (with /quote, /pay and /call) and signs with your key, inside your budget.'
+  }, 501);
 });
 
 // OpenAPI spec endpoint

@@ -18,13 +18,13 @@ interface SceneProps {
 }
 
 const PALETTE = {
-  // Claude light: ivory paper, oat shading, warm grey ink, a clay accent
-  light: { edge: "#e3dfd2", center: "#fdfcf8", rim: "#d97757", rimAmt: 0.2, dots: "#a19e94", halo: "#d97757", haloAmt: 0.13, arcStart: "#b3ab9c", coin: "#d97757", glow: "#c6613f", face: "#faf9f5", faceInk: "#141413", paid: "#6b8a4e", ring: "#cdc8ba", light: "#f3c3ae" },
+  // Claude light paper (ivory, oat shading, warm grey dots) with blue/violet accents
+  light: { edge: "#e3dfd2", center: "#fdfcf8", rim: "#6a70ee", rimAmt: 0.26, dots: "#a19e94", halo: "#6f76f0", haloAmt: 0.16, arcStart: "#b3ab9c", coin: "#6445dc", glow: "#4f46e5", face: "#faf9f5", faceInk: "#141413", paid: "#2f7d52", ring: "#cdc8ba", light: "#b9bdfb" },
   dark: { edge: "#0d0d14", center: "#272638", rim: "#6f7bff", rimAmt: 0.55, dots: "#8986a6", halo: "#6d74ff", haloAmt: 0.36, arcStart: "#6f8bff", coin: "#8f86ff", glow: "#4c3fd6", face: "#1d1c2c", faceInk: "#dcd9ff", paid: "#3ccf93", ring: "#45445c", light: "#8f86ff" },
 } as const;
 
 const RING_COLORS = {
-  light: ["#d97757", "#788c5d", "#6a9bcc", "#c46686", "#d4a27f", "#9e9bbf"],
+  light: ["#6445dc", "#3f63f2", "#2ea3b8", "#3a9a6e", "#d9a13b", "#a35bd6"],
   dark: ["#6f4cff", "#ff007a", "#2ebac6", "#00d395", "#f5a524", "#4c6ef5"],
 };
 

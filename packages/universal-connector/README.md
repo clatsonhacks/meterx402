@@ -4,6 +4,12 @@
 
 Works with: **Claude** | **ChatGPT** | **Gemini** | **Grok** | **Perplexity** | **Any LLM**
 
+> **To pay for calls, use `npx mx402 connector`.** It serves the same kind of REST API with an
+> OpenAPI spec (`listServices`, `getQuote`, `payQuote`, `callService`, `getWallet`) and signs
+> every payment with **your own** testnet key (`BUYER_ACCOUNT_ID` / `BUYER_PRIVATE_KEY`) inside
+> `BUYER_BUDGET`, behind a bearer token. This package only lists services; its `/call` answers
+> 501, so it can never spend from someone else's wallet.
+
 ## What is this?
 
 A single connector that makes MeterX402's pay-per-use API marketplace available to ALL major LLM platforms. Instead of building separate plugins for each platform, this provides a unified REST API that works everywhere.

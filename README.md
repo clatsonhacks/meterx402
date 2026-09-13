@@ -313,8 +313,26 @@ npx mx402 data weather-2026.csv --wallet 0.0.1234                     # a datase
 |---|---|
 | SDK | `new MeterX402({ wallet, budget, registry })`: `discover`, `quote`, `pay`, `call`. `MeterX402Agent` adds capability calls, tabs, quote rounds and A2A. |
 | MCP | `npx mx402 mcp`: 12 tools, from `list_services` and `call_service` to `query_subgraph` and `ask_dex_analyst` |
+| REST connector | `npx mx402 connector`: an OpenAPI API (`listServices`, `getQuote`, `payQuote`, `callService`, `getWallet`) behind a bearer token, for ChatGPT Custom GPT Actions, the VS Code extension and function-calling LLMs |
 | A2A | `POST /a2a` `message/send` → `input-required` with an x402 quote → pay in task metadata → `completed` with a receipt |
 | HTTP | plain x402: call the endpoint, pay the `402` |
+
+### Connecting an AI: always your own wallet
+
+The web app's demo wallet only pays for what someone tries in the browser. Every connected tool
+signs on the user's own machine with the user's own testnet key (`BUYER_ACCOUNT_ID` /
+`BUYER_PRIVATE_KEY`, plus `BUYER_EVM_PRIVATE_KEY` or `BUYER_SOLANA_SECRET_KEY` for Base or Solana
+services), inside `BUYER_BUDGET` and `BUYER_MAX_PER_CALL`, and discovers services from `MX_HUB`.
+
+| Tool | How it connects |
+|---|---|
+| Claude Desktop, Claude Code | MCP: `npx -y mx402 mcp` in `claude_desktop_config.json`, or `claude mcp add meterx402 -e … -- npx -y mx402 mcp` |
+| ChatGPT | `npx mx402 connector` on your machine, a tunnel (`ngrok http 3402`), then import `<tunnel>/openapi.json` as a GPT Action with Bearer auth |
+| VS Code (Copilot agent mode), Cursor | MCP: `.vscode/mcp.json` (the key is asked once and kept in VS Code's secret storage) or `.cursor/mcp.json` |
+| MeterX402 VS Code extension | browse, call and publish from the sidebar; **Start My Connector** runs `mx402 connector` with your key, and the extension only holds its token |
+
+The app's Explore page has step-by-step guides for each (**Use it from your AI**), and
+`/app?connect=claude|chatgpt|vscode` opens one directly.
 
 ## Registry and reputation
 

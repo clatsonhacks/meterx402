@@ -30,10 +30,14 @@ Browse, call, and publish metered APIs directly from Visual Studio Code. Pay onl
 
 1. Install the extension from the VSCode Marketplace
 2. Open the MeterX402 sidebar (click the icon in the activity bar)
-3. Configure your settings (optional):
-   - Hub URL (default: http://localhost:4021)
-   - Buyer account credentials
-   - Spending limits
+3. Put **your own** Hedera testnet account in your workspace `.env`
+   (`BUYER_ACCOUNT_ID`, `BUYER_PRIVATE_KEY`, `BUYER_BUDGET`) and run
+   **MeterX402: Start My Connector**. It opens a terminal running `npx mx402 connector`, which
+   signs every payment with your key inside your budget. The extension only keeps the
+   connector's token (in VS Code secret storage): no private key in settings, and no shared
+   wallet ever pays for your calls.
+4. Settings (optional): Hub URL (default `http://localhost:4021`), Connector URL
+   (default `http://localhost:3402`), default most to pay per call.
 
 ## Quick Start
 

@@ -56,6 +56,17 @@ The MCP server's tools:
 
 `mx402 analyst "<question>"` runs the same analyst from a terminal.
 
+For tools that speak REST instead of MCP (ChatGPT Custom GPT Actions, the MeterX402 VS Code
+extension, any function-calling LLM):
+
+```bash
+npx mx402 connector          # http://localhost:3402, OpenAPI at /openapi.json, prints a bearer token
+```
+
+Both the MCP server and the connector sign with **your own** key from the environment or `.env`
+(`BUYER_ACCOUNT_ID` / `BUYER_PRIVATE_KEY`, plus `BUYER_EVM_PRIVATE_KEY` or
+`BUYER_SOLANA_SECRET_KEY`), inside `BUYER_BUDGET`. Nothing is ever paid from a hub's wallet.
+
 ## What it detects
 
 | Your API returns | Metered as | Typical price |

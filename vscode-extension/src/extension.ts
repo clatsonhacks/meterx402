@@ -5,20 +5,81 @@ import { MeterX402Client } from './client';
 
 let client: MeterX402Client;
 let servicesProvider: ServicesProvider;
+let secrets: vscode.SecretStorage;
+const TOKEN_KEY = 'meterx402.connectorToken';
+
+/** Open a terminal running the user's own connector with a fresh token. The
+ *  connector reads BUYER_ACCOUNT_ID / BUYER_PRIVATE_KEY from that terminal's
+ *  environment or the workspace .env, so the key never touches VS Code. */
+async function startConnector() {
+    const config = vscode.workspace.getConfiguration('meterx402');
+    const hubUrl = config.get<string>('hubUrl') || 'http://localhost:4021';
+    const connectorUrl = config.get<string>('connectorUrl') || 'http://localhost:3402';
+    const port = new URL(connectorUrl).port || '3402';
+    const bytes = new Uint8Array(24);
+    globalThis.crypto.getRandomValues(bytes);
+    const token = Buffer.from(bytes).toString('base64url');
+    await secrets.store(TOKEN_KEY, token);
+    const terminal = vscode.window.createTerminal({
+        name: 'MeterX402 connector',
+        cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+        env: { CONNECTOR_TOKEN: token, MX_HUB: hubUrl }
+    });
+    terminal.show();
+    terminal.sendText(`npx -y mx402 connector --port ${port}`);
+    vscode.window.showInformationMessage(
+        'Connector starting. It pays from BUYER_ACCOUNT_ID / BUYER_PRIVATE_KEY in this workspace\'s .env (or your shell): your own testnet account, not a shared wallet.'
+    );
+}
+
+async function explainConnector(result: { connector?: string; error?: string }) {
+    const choice = await vscode.window.showErrorMessage(
+        `${result.error} Calls are paid from your own testnet account through your connector.`,
+        'Start My Connector',
+        'Set Token'
+    );
+    if (choice === 'Start My Connector') {
+        await startConnector();
+    } else if (choice === 'Set Token') {
+        await vscode.commands.executeCommand('meterx402.setConnectorToken');
+    }
+}
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('MeterX402 extension is now active');
 
-    // Initialize client
+    // Initialize client: discovery from the hub, payments through the user's own
+    // connector. The connector's bearer token lives in VS Code's secret storage.
     const config = vscode.workspace.getConfiguration('meterx402');
+    secrets = context.secrets;
     client = new MeterX402Client(
         config.get('hubUrl') || 'http://localhost:4021',
         {
-            accountId: config.get('buyerAccountId'),
-            privateKey: config.get('buyerPrivateKey'),
-            maxPerCall: config.get('maxPerCall'),
-            budget: config.get('budget')
+            url: (config.get<string>('connectorUrl') || 'http://localhost:3402').replace(/\/+$/, ''),
+            token: async () => secrets.get(TOKEN_KEY)
         }
+    );
+
+    // Command: Start My Connector (a terminal running `npx mx402 connector`)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('meterx402.startConnector', async () => {
+            await startConnector();
+        })
+    );
+
+    // Command: Set Connector Token (for a connector started by hand)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('meterx402.setConnectorToken', async () => {
+            const token = await vscode.window.showInputBox({
+                prompt: 'Bearer token printed by `npx mx402 connector`',
+                password: true,
+                ignoreFocusOut: true
+            });
+            if (token) {
+                await secrets.store(TOKEN_KEY, token.trim());
+                vscode.window.showInformationMessage('Connector token saved.');
+            }
+        })
     );
 
     // Register services tree view
@@ -136,8 +197,8 @@ async function callService(item: ServiceItem) {
     }
 
     const maxPrice = await vscode.window.showInputBox({
-        prompt: 'Maximum price (HBAR)',
-        value: '0.1'
+        prompt: `Most you'll pay for this call (${service.price.currency})`,
+        value: vscode.workspace.getConfiguration('meterx402').get<string>('maxPerCall') || '0.1'
     });
 
     // Call the service
@@ -147,14 +208,16 @@ async function callService(item: ServiceItem) {
             title: `Calling ${service.name}...`,
             cancellable: false
         }, async (progress) => {
-            progress.report({ message: 'Getting quote...' });
+            progress.report({ message: 'Metering, quoting and paying from your account...' });
 
             const result = await client.callService(service.service_id, {
                 path,
                 maxPrice: parseFloat(maxPrice || '0.1')
             });
 
-            if (result.success) {
+            if (result.connector) {
+                void explainConnector(result);
+            } else if (result.success) {
                 // Show result in new document
                 const doc = await vscode.workspace.openTextDocument({
                     content: JSON.stringify(result.data, null, 2),
@@ -259,32 +322,19 @@ async function publishAPI() {
 }
 
 async function viewWallet() {
-    const config = vscode.workspace.getConfiguration('meterx402');
-    const accountId = config.get<string>('buyerAccountId');
-
-    if (!accountId) {
-        const result = await vscode.window.showInformationMessage(
-            'No wallet configured. Set up your Hedera account in settings.',
-            'Open Settings'
-        );
-
-        if (result === 'Open Settings') {
-            vscode.commands.executeCommand('workbench.action.openSettings', 'meterx402');
-        }
-        return;
-    }
-
     try {
         const info = await client.getWalletInfo();
-
-        const message = `
-Wallet: ${info.account}
-Balance: ${info.balance || 'N/A'} HBAR
-Max per call: ${config.get('maxPerCall')} HBAR
-Budget: ${config.get('budget')} HBAR
-        `.trim();
-
-        vscode.window.showInformationMessage(message);
+        if (info.connector) {
+            await explainConnector(info);
+            return;
+        }
+        if (!info.ok) {
+            vscode.window.showWarningMessage(`${info.error}`);
+            return;
+        }
+        vscode.window.showInformationMessage(
+            `Paying from your account ${info.account} · budget left ${info.budget_remaining ?? 'unlimited'} HBAR${info.evm ? ' · Base Sepolia' : ''}${info.solana ? ' · Solana devnet' : ''}`
+        );
     } catch (error: any) {
         vscode.window.showErrorMessage(`Error fetching wallet info: ${error.message}`);
     }

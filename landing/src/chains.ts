@@ -9,7 +9,7 @@ export interface ChainSpot {
   unit: string;
   at: readonly [number, number];
   glow: string;
-  /** a warmer glow for Claude light, so arcs don't turn violet on ivory */
+  /** the glow on light paper: a touch deeper so it reads on ivory */
   glowLight: string;
   core: string;
   coreDark: string;
@@ -17,9 +17,9 @@ export interface ChainSpot {
 }
 
 export const CHAINS: ChainSpot[] = [
-  { key: "hedera", label: "Hedera", unit: "HBAR", at: [34, -98], glow: "#7048e8", glowLight: "#c6613f", core: "#1f1f24", coreDark: "#ecebf7", dot: "var(--hedera-dot)" },
-  { key: "base", label: "Base", unit: "USDC", at: [50, 2], glow: "#2f6bff", glowLight: "#6a9bcc", core: "#0052ff", coreDark: "#5b91ff", dot: "#0052ff" },
-  { key: "solana", label: "Solana", unit: "USDC", at: [-18, -48], glow: "#14c98a", glowLight: "#7f9a62", core: "#9945ff", coreDark: "#b48cff", dot: "linear-gradient(135deg,#9945ff,#14f195)" },
+  { key: "hedera", label: "Hedera", unit: "HBAR", at: [34, -98], glow: "#7048e8", glowLight: "#7048e8", core: "#1f1f24", coreDark: "#ecebf7", dot: "var(--hedera-dot)" },
+  { key: "base", label: "Base", unit: "USDC", at: [50, 2], glow: "#2f6bff", glowLight: "#3f6ff0", core: "#0052ff", coreDark: "#5b91ff", dot: "#0052ff" },
+  { key: "solana", label: "Solana", unit: "USDC", at: [-18, -48], glow: "#14c98a", glowLight: "#1fa97a", core: "#9945ff", coreDark: "#b48cff", dot: "linear-gradient(135deg,#9945ff,#14f195)" },
 ];
 
 /** Where buyers pay from, picked per receipt so the arcs are stable. */

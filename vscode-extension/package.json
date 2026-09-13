@@ -71,6 +71,18 @@
         "title": "Open Dashboard",
         "category": "MeterX402",
         "icon": "$(dashboard)"
+      },
+      {
+        "command": "meterx402.startConnector",
+        "title": "Start My Connector (pays with my own testnet key)",
+        "category": "MeterX402",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "meterx402.setConnectorToken",
+        "title": "Set Connector Token",
+        "category": "MeterX402",
+        "icon": "$(key)"
       }
     ],
     "viewsContainers": {
@@ -105,7 +117,7 @@
     "viewsWelcome": [
       {
         "view": "meterx402.services",
-        "contents": "Welcome to MeterX402! Browse and call metered APIs.\n[Search Services](command:meterx402.searchServices)\n[Open Dashboard](command:meterx402.openDashboard)"
+        "contents": "Welcome to MeterX402! Browse and call metered APIs.\nCalls are paid from your own testnet account through your local connector, never a shared wallet.\n[Start My Connector](command:meterx402.startConnector)\n[Search Services](command:meterx402.searchServices)\n[Open Dashboard](command:meterx402.openDashboard)"
       }
     ],
     "configuration": {
@@ -114,27 +126,17 @@
         "meterx402.hubUrl": {
           "type": "string",
           "default": "http://localhost:4021",
-          "description": "MeterX402 hub URL"
+          "description": "MeterX402 hub (the registry to discover services in)"
         },
-        "meterx402.buyerAccountId": {
+        "meterx402.connectorUrl": {
           "type": "string",
-          "default": "",
-          "description": "Your Hedera account ID for buying services (0.0.xxxxx)"
-        },
-        "meterx402.buyerPrivateKey": {
-          "type": "string",
-          "default": "",
-          "description": "Your private key (stored securely in VSCode settings)"
+          "default": "http://localhost:3402",
+          "description": "Your local connector (npx mx402 connector). It signs payments with your own key (BUYER_ACCOUNT_ID / BUYER_PRIVATE_KEY in its environment or .env) inside BUYER_BUDGET. Keys never go into VS Code settings."
         },
         "meterx402.maxPerCall": {
           "type": "string",
           "default": "0.1",
-          "description": "Maximum HBAR to spend per API call"
-        },
-        "meterx402.budget": {
-          "type": "string",
-          "default": "1",
-          "description": "Total HBAR budget for all calls"
+          "description": "Default most to pay for one call (asked each time)"
         }
       }
     },

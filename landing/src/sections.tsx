@@ -191,6 +191,21 @@ export function Data() {
 }
 
 // ── 6. agents ────────────────────────────────────────────────────────────
+const CONNECT = [
+  {
+    id: "claude", name: "Claude", how: "Desktop or Claude Code, over MCP",
+    icon: <svg viewBox="0 0 24 24" width="22" height="22"><g fill="#D97757">{[0, 30, 60, 90, 120, 150].map((r) => <rect key={r} x="10.9" y="2.5" width="2.2" height="19" rx="1.1" transform={`rotate(${r} 12 12)`} />)}</g></svg>,
+  },
+  {
+    id: "chatgpt", name: "ChatGPT", how: "a Custom GPT, through your connector",
+    icon: <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18a5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07ZM13.26 22.43a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.8.8 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.5ZM3.6 18.3a4.47 4.47 0 0 1-.54-3.01l.14.09 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06l-4.83 2.79A4.5 4.5 0 0 1 3.6 18.3ZM2.34 7.9A4.49 4.49 0 0 1 4.7 5.92v5.68a.77.77 0 0 0 .39.68l5.82 3.35-2.02 1.17a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.87Zm16.6 3.86-5.84-3.39 2.02-1.16a.08.08 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.67Zm2-3.02-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66ZM8.3 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.08a4.5 4.5 0 0 1 7.38-3.45l-.14.08-4.78 2.76a.8.8 0 0 0-.39.68Zm1.1-2.37 2.6-1.5 2.61 1.5v3l-2.6 1.5-2.61-1.5Z"/></svg>,
+  },
+  {
+    id: "vscode", name: "VS Code", how: "Copilot agent, Cursor or the extension",
+    icon: <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#0098FF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4.5l-3 15" /></svg>,
+  },
+];
+
 export function Agents() {
   return (
     <section id="agents" className="section" data-stage="agents">
@@ -208,20 +223,39 @@ export function Agents() {
           <div className="cta-row reveal"><a className="btn primary" href={ANALYST}>Ask the DEX analyst</a></div>
         </div>
         <div className="agent-side">
-          <div className="chips reveal">
-            {[["MCP", "12 tools: npx mx402 mcp"], ["A2A", "every service has an agent card"], ["SDK", "quote, pay, verify in code"], ["Skill", "SKILL.md teaches when to buy"]].map(([k, v]) => (
-              <div key={k} className="chip glass"><b>{k}</b><span>{v}</span></div>
-            ))}
+          <div className="connect reveal">
+            <div className="connect-head">
+              <b>Connect your AI</b>
+              <span>It pays from <em>your own</em> testnet account, inside the budget you set.</span>
+            </div>
+            <div className="connect-grid">
+              {CONNECT.map((c) => (
+                <a key={c.id} className="connect-btn glass" href={`/app?connect=${c.id}#user`}>
+                  <span className="connect-ic" aria-hidden="true">{c.icon}</span>
+                  <span><b>{c.name}</b><small>{c.how}</small></span>
+                </a>
+              ))}
+            </div>
           </div>
           <pre className="code reveal">{`{
   "mcpServers": {
     "meterx402": {
       "command": "npx",
       "args": ["-y", "mx402", "mcp"],
-      "env": { "BUYER_BUDGET": "1 HBAR" }
+      "env": {
+        "MX_HUB": "https://your-hub",
+        "BUYER_ACCOUNT_ID": "0.0.your-account",
+        "BUYER_PRIVATE_KEY": "your-testnet-key",
+        "BUYER_BUDGET": "1 HBAR"
+      }
     }
   }
 }`}</pre>
+          <div className="chips reveal">
+            {[["MCP", "12 tools: npx mx402 mcp"], ["A2A", "every service has an agent card"], ["SDK", "quote, pay, verify in code"], ["Skill", "SKILL.md teaches when to buy"]].map(([k, v]) => (
+              <div key={k} className="chip glass"><b>{k}</b><span>{v}</span></div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -280,10 +314,10 @@ const WALLETS = [
     foot: <a href={APP}>Open the app</a>,
   },
   {
-    who: "Your agent or app",
-    title: "Bring your own key",
-    text: "The SDK, CLI and MCP server sign with your own testnet key: a Hedera account, an EVM key for Base Sepolia, or a Solana keypair. The budget is checked before anything is signed.",
-    foot: <code>new MeterX402({"{ wallet, budget }"})</code>,
+    who: "Claude, ChatGPT, VS Code, your code",
+    title: "Your own account, never ours",
+    text: "Connected AIs and the SDK sign with your own testnet key (a Hedera account, an EVM key for Base Sepolia, or a Solana keypair) on your machine, inside the budget you set. The demo wallet is only for this browser.",
+    foot: <a href="/app?connect=claude#user">Connect your AI</a>,
   },
   {
     who: "Selling an API",

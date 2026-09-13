@@ -8,14 +8,14 @@
 <meta property="og:title" content="MeterX402: pay per use, not per call">
 <meta property="og:description" content="APIs and AI agents pay for exactly what each call returns, inside a budget, with a receipt anyone can verify on chain.">
 <meta name="theme-color" content="#faf9f5">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d97757' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='m12 13.8 4.2-4.2'/%3E%3Cpath d='M3.5 18.8a10 10 0 1 1 17 0'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b5be6' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='m12 13.8 4.2-4.2'/%3E%3Cpath d='M3.5 18.8a10 10 0 1 1 17 0'/%3E%3C/svg%3E">
 <script>
   // Old links pointed at the app on "/": send them to /app with everything intact.
   // Then apply the stored theme before first paint (shared with the app).
   (function () {
     try {
       var s = new URLSearchParams(location.search), h = location.hash;
-      var appKeys = ["open", "ask", "lane", "stream", "service", "integ", "rfq", "tab"];
+      var appKeys = ["open", "ask", "lane", "stream", "service", "integ", "rfq", "tab", "connect"];
       if (/^#(user|deployer)/.test(h) || appKeys.some(function (k) { return s.has(k); })) { location.replace("/app" + location.search + h); return; }
       var q = s.get("theme"), t = q || localStorage.getItem("mx402.theme");
       if (q === "system") localStorage.removeItem("mx402.theme"); else if (q) localStorage.setItem("mx402.theme", q);

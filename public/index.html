@@ -18,14 +18,23 @@
 <link rel="stylesheet" href="/ui.css">
 <link rel="stylesheet" href="/consumer.css">
 <style>
+  .connect-row { margin: 34px 0 8px; }
+  .cr-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; }
+  .cr-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+  .cr-head p { margin: 0; max-width: 620px; font-size: 14px; color: var(--text-secondary); }
   .llm-connect {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-top: 24px;
-    max-width: 600px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 16px;
   }
+  @media (max-width: 760px) { .llm-connect { grid-template-columns: minmax(0, 1fr); } }
   .connect-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font: inherit;
+    width: 100%;
     background: white;
     border: 2px solid #e5e5e5;
     border-radius: 12px;
@@ -34,6 +43,13 @@
     cursor: pointer;
     transition: all 0.2s ease;
   }
+  .llm-modal-content { width: min(700px, calc(100vw - 32px)); box-sizing: border-box; }
+  @media (max-width: 560px) { .llm-modal-content { padding: 24px 18px !important; } }
+  .own-wallet { display: flex; gap: 10px; align-items: flex-start; margin: -8px 0 22px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; background: var(--accent-subtle, #eef3ff); color: var(--text-primary, #1a1a1a); }
+  .own-wallet svg { width: 18px; height: 18px; flex: none; color: var(--accent, #2a78d6); margin-top: 1px; }
+  .llm-step-content .fine { font-size: 12.5px; }
+  .llm-step-content a { color: var(--accent, #2a78d6); }
+  .code-block pre { white-space: pre-wrap; word-break: break-word; }
   .connect-card:hover {
     border-color: #2a78d6;
     transform: translateY(-2px);
@@ -268,6 +284,31 @@
         </div>
       </div>
 
+      <!-- Connect an AI: guides are built by connect.js -->
+      <section class="connect-row" aria-labelledby="connect-h">
+        <div class="cr-head">
+          <h2 id="connect-h">Use it from your AI</h2>
+          <p>Claude, ChatGPT and VS Code pay from <b>your own</b> testnet account, inside a budget you set. The demo wallet on this page only pays for what you try here.</p>
+        </div>
+        <div class="llm-connect">
+          <button class="connect-card" type="button" data-llm="claude">
+            <span class="connect-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30"><g fill="#D97757"><rect x="10.9" y="2.5" width="2.2" height="19" rx="1.1"/><rect x="10.9" y="2.5" width="2.2" height="19" rx="1.1" transform="rotate(30 12 12)"/><rect x="10.9" y="2.5" width="2.2" height="19" rx="1.1" transform="rotate(60 12 12)"/><rect x="10.9" y="2.5" width="2.2" height="19" rx="1.1" transform="rotate(90 12 12)"/><rect x="10.9" y="2.5" width="2.2" height="19" rx="1.1" transform="rotate(120 12 12)"/><rect x="10.9" y="2.5" width="2.2" height="19" rx="1.1" transform="rotate(150 12 12)"/></g></svg></span>
+            <span class="connect-title">Connect Claude</span>
+            <span class="connect-desc">Claude Desktop or Claude Code, over MCP</span>
+          </button>
+          <button class="connect-card" type="button" data-llm="chatgpt">
+            <span class="connect-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30"><path fill="#10A37F" d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg></span>
+            <span class="connect-title">Connect ChatGPT</span>
+            <span class="connect-desc">A Custom GPT, through your own connector</span>
+          </button>
+          <button class="connect-card" type="button" data-llm="vscode">
+            <span class="connect-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#0098FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4.5l-3 15"/></svg></span>
+            <span class="connect-title">Connect VS Code</span>
+            <span class="connect-desc">Copilot agent mode, Cursor, or the extension</span>
+          </button>
+        </div>
+      </section>
+
       <section class="ticker" aria-label="Recent payments" id="ticker"></section>
 
       <section class="bento" aria-label="What you can do">
@@ -286,9 +327,9 @@
         <article class="bento-card b-agents">
           <span class="b-eyebrow">MCP · A2A · SDK</span>
           <h3>Let your agent pay</h3>
-          <p>Claude, ChatGPT or your own agent finds a service, sees the exact price first and pays within a budget you set. No API keys to hand out.</p>
+          <p>Claude, ChatGPT or your own agent finds a service, sees the exact price first and pays from your own testnet account, within a budget you set. No API keys to hand out.</p>
           <ul class="b-chan">
-            <li><b>MCP</b><span>Claude Desktop, Cursor: <code>npx mx402 mcp</code></span></li>
+            <li><b>MCP</b><span>Claude, VS Code, Cursor: <code>npx mx402 mcp</code></span></li>
             <li><b>A2A</b><span>every service publishes an agent card</span></li>
             <li><b>SDK</b><span><code>agent.call("lending_rates")</code> quotes, pays, verifies</span></li>
             <li><b>Skill</b><span>a SKILL.md that teaches agents when to buy</span></li>
@@ -296,6 +337,7 @@
           <div class="b-connect">
             <button class="ghost" id="bento-claude">Connect Claude</button>
             <button class="ghost" id="bento-chatgpt">Connect ChatGPT</button>
+            <button class="ghost" type="button" data-llm="vscode">Connect VS Code</button>
             <button class="ghost" id="bento-code">See the code</button>
           </div>
         </article>
@@ -615,114 +657,6 @@
     </div>
   </section>
 
-  <!-- LLM Connection Modals -->
-  <div class="llm-modal" id="modal-chatgpt" onclick="if(event.target===this) closeLLMModal('chatgpt')">
-    <div class="llm-modal-content">
-      <button class="llm-modal-close" onclick="closeLLMModal('chatgpt')">&times;</button>
-      <h2>Connect to ChatGPT</h2>
-      <p class="label">Use MeterX402 services in Custom GPTs with these simple steps:</p>
-
-      <div class="llm-step">
-        <div class="llm-step-num">1</div>
-        <div class="llm-step-content">
-          <h3>Start ngrok</h3>
-          <p>Expose your local MeterX402 connector to the internet:</p>
-          <div class="code-block">
-            <code>ngrok http 3402</code>
-            <button class="copy-btn" onclick="copyToClipboard('ngrok http 3402', this)">Copy</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="llm-step">
-        <div class="llm-step-num">2</div>
-        <div class="llm-step-content">
-          <h3>Copy your ngrok URL</h3>
-          <p>Look for the "Forwarding" line in ngrok, something like: <code>https://abc123.ngrok.io</code></p>
-        </div>
-      </div>
-
-      <div class="llm-step">
-        <div class="llm-step-num">3</div>
-        <div class="llm-step-content">
-          <h3>Create a Custom GPT</h3>
-          <p>Go to <a href="https://chat.openai.com/gpts/editor" target="_blank">ChatGPT Custom GPT Editor</a></p>
-          <p>In the "Configure" tab, add actions with your ngrok URL as the base.</p>
-        </div>
-      </div>
-
-      <div class="llm-step">
-        <div class="llm-step-num">4</div>
-        <div class="llm-step-content">
-          <h3>Add the OpenAPI spec</h3>
-          <p>Import or paste the OpenAPI specification for MeterX402's connector API.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="llm-modal" id="modal-claude" onclick="if(event.target===this) closeLLMModal('claude')">
-    <div class="llm-modal-content">
-      <button class="llm-modal-close" onclick="closeLLMModal('claude')">&times;</button>
-      <h2>Connect to Claude Desktop</h2>
-      <p class="label">Add MeterX402 tools to Claude Desktop using MCP (Model Context Protocol):</p>
-
-      <div class="llm-step">
-        <div class="llm-step-num">1</div>
-        <div class="llm-step-content">
-          <h3>Build the MCP server</h3>
-          <p>From your MeterX402 directory:</p>
-          <div class="code-block">
-            <code>npm run build</code>
-            <button class="copy-btn" onclick="copyToClipboard('npm run build', this)">Copy</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="llm-step">
-        <div class="llm-step-num">2</div>
-        <div class="llm-step-content">
-          <h3>Configure Claude Desktop</h3>
-          <p>Edit your Claude config file at: <code>C:\Users\YOUR_USERNAME\.claude.json</code></p>
-          <p>Add the MeterX402 MCP server to the <code>mcpServers</code> section:</p>
-          <div class="code-block">
-            <pre>{
-  "mcpServers": {
-    "meterx402": {
-      "command": "node",
-      "args": ["A:/Hack/meterx402/packages/mcp-server/dist/index.js"],
-      "env": {
-        "HUB_URL": "http://localhost:4021",
-        "BUYER_ACCOUNT_ID": "0.0.YOUR_ACCOUNT_ID",
-        "BUYER_PRIVATE_KEY": "your_private_key_here",
-        "BUYER_BUDGET": "1 HBAR"
-      }
-    }
-  }
-}</pre>
-            <button class="copy-btn" onclick="copyToClipboard(claudeConfig, this)">Copy</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="llm-step">
-        <div class="llm-step-num">3</div>
-        <div class="llm-step-content">
-          <h3>Restart Claude Desktop</h3>
-          <p>Fully quit Claude Desktop (not just close the window - quit from the tray/menu bar) and reopen it.</p>
-        </div>
-      </div>
-
-      <div class="llm-step">
-        <div class="llm-step-num">4</div>
-        <div class="llm-step-content">
-          <h3>Start a new chat</h3>
-          <p>MeterX402 tools will now be available in any new conversation. Existing chats won't have them - MCP is loaded at session start.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
 </main>
 <div class="tip" id="tip" hidden></div>
 <div id="drawer-root"></div>
@@ -736,65 +670,6 @@
 <script src="/app.js"></script>
 <script src="/analyst.js"></script>
 <script src="/home.js"></script>
-<script>
-// LLM Connection Modal Functions
-const claudeConfig = `{
-  "mcpServers": {
-    "meterx402": {
-      "command": "node",
-      "args": ["A:/Hack/meterx402/packages/mcp-server/dist/index.js"],
-      "env": {
-        "HUB_URL": "http://localhost:4021",
-        "BUYER_ACCOUNT_ID": "0.0.YOUR_ACCOUNT_ID",
-        "BUYER_PRIVATE_KEY": "your_private_key_here",
-        "BUYER_BUDGET": "1 HBAR"
-      }
-    }
-  }
-}`;
-
-function openLLMModal(type) {
-  const modal = document.getElementById('modal-' + type);
-  if (modal) {
-    modal.classList.add('show');
-    document.body.style.overflow = 'hidden';
-  }
-}
-
-function closeLLMModal(type) {
-  const modal = document.getElementById('modal-' + type);
-  if (modal) {
-    modal.classList.remove('show');
-    document.body.style.overflow = '';
-  }
-}
-
-function copyToClipboard(text, button) {
-  navigator.clipboard.writeText(text).then(() => {
-    const originalText = button.textContent;
-    button.textContent = 'Copied!';
-    button.classList.add('copied');
-
-    setTimeout(() => {
-      button.textContent = originalText;
-      button.classList.remove('copied');
-    }, 2000);
-  }).catch(err => {
-    console.error('Failed to copy:', err);
-    button.textContent = 'Failed';
-    setTimeout(() => {
-      button.textContent = 'Copy';
-    }, 2000);
-  });
-}
-
-// Close modal on Escape key
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeLLMModal('chatgpt');
-    closeLLMModal('claude');
-  }
-});
-</script>
+<script src="/connect.js"></script>
 </body>
 </html>

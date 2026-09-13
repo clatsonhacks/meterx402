@@ -44,6 +44,11 @@ ${bold("mx402")} — turn any API into an x402 API that charges for what each ca
       Run the MeterX402 MCP server over stdio (list_services, get_quote, pay_for_service, …).
       Configure with MX_HUB and BUYER_ACCOUNT_ID / BUYER_PRIVATE_KEY / BUYER_BUDGET.
 
+  ${bold("mx402 connector")} [--port 3402] [--registry url] [--token t]
+      A local REST API + OpenAPI spec for ChatGPT Custom GPT Actions, the VS Code
+      extension or any function-calling LLM. Pays with YOUR key (the same BUYER_*
+      as mcp) inside your budget; every call needs the bearer token it prints.
+
   ${bold("mx402 wallet new")} [--hbar 5]
       Create a Hedera testnet account (needs HEDERA_ACCOUNT_ID/HEDERA_PRIVATE_KEY
       in .env) and print it, to use as --wallet.
@@ -63,7 +68,25 @@ export async function cli(argv: string[]): Promise<void> {
   if (cmd === "inspect") return inspect(argv.slice(1));
   if (cmd === "wallet") return wallet(argv.slice(1));
   if (cmd === "analyst") return analyst(argv.slice(1));
+  if (cmd === "connector") return connector(argv.slice(1));
   return serve(argv);
+}
+
+async function connector(argv: string[]): Promise<void> {
+  const flag = (name: string) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined; };
+  const { startConnector } = await import("./connector.ts");
+  const { port, token } = await startConnector({ port: flag("port") ? Number(flag("port")) : undefined, registry: flag("registry"), token: flag("token") });
+  const account = process.env.BUYER_ACCOUNT_ID ?? process.env.HEDERA_ACCOUNT_ID;
+  console.log(`
+${bold("MeterX402 connector")} on http://localhost:${port}
+  OpenAPI spec   http://localhost:${port}/openapi.json
+  pays from      ${account ? green(account) : red("no wallet: set BUYER_ACCOUNT_ID and BUYER_PRIVATE_KEY (your own testnet account)")}${process.env.BUYER_EVM_PRIVATE_KEY ? ", + Base Sepolia" : ""}${process.env.BUYER_SOLANA_SECRET_KEY ? ", + Solana devnet" : ""}
+  budget         ${process.env.BUYER_BUDGET ?? "1 HBAR"}
+  bearer token   ${bold(token)}   ${dim("(set CONNECTOR_TOKEN to keep it across restarts)")}
+
+${dim("ChatGPT: expose it (e.g. ngrok http " + port + "), import <public-url>/openapi.json into your GPT's Actions,")}
+${dim("and set Authentication to API key, Bearer, with the token above.")}
+`);
 }
 
 /** Flags shared by `check` and the live gateway. */

@@ -1,5 +1,10 @@
 // MeterX402 API Client
 // Using Node's built-in fetch (Node 18+)
+//
+// Discovery and publishing go to the hub. Paying goes to the user's own
+// connector (npx mx402 connector), which signs with the user's own testnet key
+// inside their budget. The extension never pays from a hub's demo wallet and
+// never holds a private key.
 
 export interface Service {
     service_id: string;
@@ -30,6 +35,8 @@ export interface CallResult {
     success: boolean;
     data?: any;
     error?: string;
+    /** the connector isn't running or rejected the token */
+    connector?: 'unreachable' | 'unauthorized';
     receipt?: {
         amount: string;
         currency: string;
@@ -39,17 +46,15 @@ export interface CallResult {
     };
 }
 
-export interface WalletConfig {
-    accountId?: string;
-    privateKey?: string;
-    maxPerCall?: string;
-    budget?: string;
+export interface ConnectorConfig {
+    url: string;
+    token: () => Promise<string | undefined>;
 }
 
 export class MeterX402Client {
     constructor(
         private hubUrl: string,
-        private config: WalletConfig
+        private connector: ConnectorConfig
     ) {}
 
     async searchServices(query?: string, capability?: string): Promise<Service[]> {
@@ -66,96 +71,69 @@ export class MeterX402Client {
 
         return (data.services || []).map((s: any) => ({
             service_id: s.service_id,
-            name: s.name || s.service_id,
-            description: s.description,
-            capabilities: s.capabilities || [],
+            name: s.descriptor?.title || s.descriptor?.name || s.service_id,
+            description: s.descriptor?.description,
+            capabilities: s.descriptor?.capabilities || [],
             price: {
-                amount: s.typical_price?.amount || s.descriptor?.pricing?.rate || '0',
-                currency: s.descriptor?.pricing?.currency || 'HBAR',
-                unit: s.descriptor?.pricing?.unit || 'unit'
+                amount: String(s.price?.rate ?? s.descriptor?.pricing?.rate ?? '0'),
+                currency: s.price?.currency || s.descriptor?.pricing?.currency || 'HBAR',
+                unit: s.price?.unit || s.descriptor?.pricing?.unit || 'unit'
             },
             reputation: s.reputation?.score,
-            endpoint: s.endpoint || s.descriptor?.endpoint,
+            endpoint: s.descriptor?.endpoint,
             sample: s.descriptor?.sample
         }));
     }
 
-    async callService(serviceId: string, options: CallOptions): Promise<CallResult> {
-        try {
-            // Get quote
-            const quoteResponse = await fetch(`${this.hubUrl}/playground/quote`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    service_id: serviceId,
-                    path: options.path,
-                    method: options.method || 'GET',
-                    body: options.body
-                })
-            });
-
-            const quoteData: any = await quoteResponse.json();
-
-            if (!quoteData.ok) {
-                return {
-                    success: false,
-                    error: quoteData.error || 'Failed to get quote'
-                };
-            }
-
-            // If it's free, return immediately
-            if (quoteData.free) {
-                return {
-                    success: true,
-                    data: quoteData.result?.data
-                };
-            }
-
-            // Check max price
-            const amount = parseFloat(quoteData.quote.amount);
-            if (options.maxPrice && amount > options.maxPrice) {
-                return {
-                    success: false,
-                    error: `Price ${amount} HBAR exceeds max price ${options.maxPrice} HBAR`
-                };
-            }
-
-            // Pay for the quote
-            const payResponse = await fetch(`${this.hubUrl}/playground/pay`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    quote_id: quoteData.quote.quote_id,
-                    maxPrice: options.maxPrice
-                })
-            });
-
-            const payData: any = await payResponse.json();
-
-            if (!payData.ok) {
-                return {
-                    success: false,
-                    error: payData.error || 'Payment failed'
-                };
-            }
-
-            return {
-                success: true,
-                data: payData.result?.data,
-                receipt: payData.result?.receipt ? {
-                    amount: payData.result.receipt.amount,
-                    currency: payData.result.receipt.currency,
-                    units: payData.result.receipt.units,
-                    unit_type: payData.result.receipt.unit,
-                    transaction_id: payData.result.receipt.txHash
-                } : undefined
-            };
-        } catch (error: any) {
-            return {
-                success: false,
-                error: error.message
-            };
+    private async connectorFetch(path: string, init: RequestInit = {}): Promise<{ status: number; body: any } | CallResult> {
+        const token = await this.connector.token();
+        if (!token) {
+            return { success: false, connector: 'unauthorized', error: 'No connector token yet: run "MeterX402: Start My Connector".' };
         }
+        let response: Response;
+        try {
+            response = await fetch(`${this.connector.url}${path}`, {
+                ...init,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init.headers || {}) }
+            });
+        } catch {
+            return { success: false, connector: 'unreachable', error: `Your connector isn't running at ${this.connector.url}.` };
+        }
+        if (response.status === 401) {
+            return { success: false, connector: 'unauthorized', error: 'The connector rejected the token: start it again, or set the token it printed.' };
+        }
+        return { status: response.status, body: await response.json().catch(() => ({})) };
+    }
+
+    async callService(serviceId: string, options: CallOptions): Promise<CallResult> {
+        const r = await this.connectorFetch('/call', {
+            method: 'POST',
+            body: JSON.stringify({
+                service_id: serviceId,
+                path: options.path,
+                method: options.method,
+                body: options.body,
+                max_price: options.maxPrice
+            })
+        });
+        if ('success' in r) {
+            return r;
+        }
+        const d = r.body;
+        if (!d.ok) {
+            return { success: false, error: d.error || `HTTP ${d.status ?? r.status}` };
+        }
+        return {
+            success: true,
+            data: d.data,
+            receipt: d.receipt ? {
+                amount: d.receipt.amount,
+                currency: d.receipt.currency,
+                units: d.receipt.units,
+                unit_type: d.receipt.unit,
+                transaction_id: d.receipt.transaction_id ?? undefined
+            } : undefined
+        };
     }
 
     async publishDataset(options: {
@@ -175,9 +153,10 @@ export class MeterX402Client {
         return await response.json();
     }
 
+    /** The account the connector pays from and the budget left; never the key. */
     async getWalletInfo(): Promise<any> {
-        const response = await fetch(`${this.hubUrl}/me`);
-        return await response.json();
+        const r = await this.connectorFetch('/wallet');
+        return 'success' in r ? { ok: false, connector: r.connector, error: r.error } : r.body;
     }
 
     async checkDataset(path: string): Promise<any> {
