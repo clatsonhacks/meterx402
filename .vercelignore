@@ -1,0 +1,5 @@
+# Vercel serves only the prebuilt static site. Upload nothing else:
+# no .env, no keys, no source, no node_modules.
+/*
+!/public
+!/vercel.json

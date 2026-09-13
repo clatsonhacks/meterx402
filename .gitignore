@@ -43,3 +43,6 @@ pnpm-lock.yaml
 vscode-extension/dist/
 vscode-extension/node_modules/
 vscode-extension/*.vsix
+
+# Vercel CLI project link
+.vercel
