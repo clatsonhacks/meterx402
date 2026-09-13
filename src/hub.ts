@@ -288,9 +288,14 @@ function tabFor(lane: string, port: number, allowance = process.env.DEMO_TAB_ALL
 // ── static dashboard ──────────────────────────────────────────────────────
 const PUBLIC = resolve(ROOT, "public");
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json", ".ico": "image/x-icon" };
+// `/` is the landing page (built from landing/ into public/landing); the app
+// lives at `/app`. Without a landing build, `/` falls back to the app.
+const LANDING = resolve(PUBLIC, "landing", "index.html");
 function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string): boolean {
   if (req.method !== "GET" && req.method !== "HEAD") return false;
-  const target = resolve(PUBLIC, "." + decodeURIComponent(pathname === "/" ? "/index.html" : pathname));
+  if (pathname === "/app/") { res.writeHead(301, { location: "/app" }); res.end(); return true; }
+  const page = pathname === "/" ? (existsSync(LANDING) ? "/landing/index.html" : "/index.html") : pathname === "/app" ? "/index.html" : pathname;
+  const target = resolve(PUBLIC, "." + decodeURIComponent(page));
   if (target !== PUBLIC && !target.startsWith(PUBLIC + sep)) return false; // path traversal
   let file = target;
   try { if (!statSync(file).isFile()) throw 0; } catch {
@@ -298,7 +303,9 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string
     file = resolve(PUBLIC, "index.html");
     if (!existsSync(file)) return false;
   }
-  res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream", "cache-control": "no-cache" });
+  // hashed build assets never change; everything else revalidates
+  const immutable = pathname.startsWith("/landing/assets/");
+  res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream", "cache-control": immutable ? "public, max-age=31536000, immutable" : "no-cache" });
   if (req.method === "HEAD") { res.end(); return true; }
   createReadStream(file).pipe(res);
   return true;

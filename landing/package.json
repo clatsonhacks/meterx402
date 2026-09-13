@@ -1,0 +1,33 @@
+{
+  "name": "meterx402-landing",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MeterX402 landing page: React, React Three Fiber, GSAP ScrollTrigger. Builds into ../public/landing, served by the hub at /.",
+  "scripts": {
+    "dev": "vite",
+    "land": "node scripts/build-land.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "@types/react-dom": "~19.2.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "d3-geo": "^3.1.1",
+    "topojson-client": "^3.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "world-atlas": "^2.0.2"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
+    "gsap": "^3.15.0",
+    "lenis": "^1.3.26",
+    "react": "~19.2.0",
+    "react-dom": "~19.2.0",
+    "three": "^0.186.0"
+  }
+}

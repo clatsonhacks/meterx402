@@ -115,6 +115,7 @@
    attribute means "as wide as the parent will allow" — so every icon needs a
    size from here, not from the markup. */
 .brand { display: inline-flex; align-items: center; gap: 8px; }
+a.brand { color: inherit; text-decoration: none; }
 .brandmark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: #fff; flex: none; }
 .brandmark svg { width: 16px; height: 16px; stroke-width: 2.2; }
 .trust svg { width: 12px; height: 12px; flex: none; }

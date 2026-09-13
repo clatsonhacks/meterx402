@@ -335,8 +335,25 @@ samples. `POST /registry/reputation/anchor` writes every score's digest to HCS.
 
 ## The web app
 
-`npm run demo` serves it at <http://localhost:4021>. It has no build step: vanilla JS and CSS in
-`public/`. The top switch has two modes.
+`npm run demo` serves two pages from <http://localhost:4021>.
+
+**`/` is the landing page.** It is a scroll-driven story built with Vite, React, React Three Fiber,
+GSAP ScrollTrigger and Lenis.
+
+- A live payment globe draws an arc for each recent real receipt, landing at the chain that
+  settled it.
+- As you scroll, the globe hands off to an x402 coin that flips to "paid" at the payment step, then
+  turns to Hedera, Base and Solana in turn.
+- A ring of subgraphs orbits it for The Graph.
+
+The whole page follows the light/dark theme toggle, 3D included. Three.js loads as a separate chunk
+after first paint, and the scene pauses while the tab is hidden. It never loads in the app. The
+source is in `landing/`, and the build is committed to `public/landing`. Run
+`npm run build:landing` to rebuild it, or `npm run dev:landing` for hot reload on :5173 (it proxies
+the hub).
+
+**`/app` is the app.** It has no build step: vanilla JS and CSS in `public/`. The top switch has
+two modes.
 
 - **User** is blue.
   - **Explore**: a hero that replays a real recent settlement, live stats, a receipts ticker, and
@@ -350,8 +367,8 @@ samples. `POST /registry/reputation/anchor` writes every score's digest to HCS.
   - **APIs**: sell an API or a dataset, and test buyers.
   - **Payments** and **Registry**.
 
-Deep links: `#user/playground`, `?open=lending-markets&tab=try`, `?ask=<question>`,
-`#deployer/apis`, `?theme=dark`.
+Deep links: `/app#user/playground`, `/app?open=lending-markets&tab=try`, `/app?ask=<question>`,
+`/app#deployer/apis`, `?theme=dark`. Older links without `/app` are forwarded.
 
 ## Repository map
 
@@ -370,7 +387,8 @@ src/adapters/a2a.ts    every service as an A2A agent
 src/hub.ts             registry API, events, analytics, HCS receipts, the web app's backend
 src/cli.ts             check, publish, data, inspect, wallet, analyst, mcp
 src/tabs.ts, subscriptions.ts, holds.ts, data.ts, detect.ts, hedera.ts
-public/                the web app (no build step)
+public/                the web app at /app (no build step); public/landing is the built landing page
+landing/               the landing page source: Vite + React + React Three Fiber + GSAP
 skills/                the agent skill for onchain data
 scripts/               live proofs: live-chains, live-graph, live-agent, live-hts, live-subscription, live-rfq
 packages/mx402/        the npm package: bundled CLI + SDK
