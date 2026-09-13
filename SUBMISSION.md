@@ -43,8 +43,8 @@ People start at a scroll-driven landing page with a live payment globe, then use
 marketplace whose hero replays a real settlement, Try it forms, a Playground and a seller dashboard.
 Agents use the SDK, an MCP server with 12 tools, a REST connector with an OpenAPI spec, A2A, or the
 included agent skill. Claude, ChatGPT and VS Code connect in a few guided steps, and each pays from
-the user's own testnet account on their own machine, never from a shared wallet. Everything ships
-as one npm package: `npx mx402`.
+the user's own testnet account on their own machine, inside a budget they set. Everything ships as
+one npm package: `npx mx402`.
 
 ## How it's made
 

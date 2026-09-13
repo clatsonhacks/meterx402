@@ -308,16 +308,16 @@ export function Sellers() {
 // ── 8. wallets ───────────────────────────────────────────────────────────
 const WALLETS = [
   {
-    who: "Trying it here",
-    title: "No wallet to connect",
-    text: "The app pays from a shared testnet demo wallet (test HBAR, no real money). You set the most you'll pay per request and per session, and anything above that asks you first.",
-    foot: <a href={APP}>Open the app</a>,
+    who: "Claude, ChatGPT, VS Code, your code",
+    title: "Pay from your own account",
+    text: "Connected AIs and the SDK sign with your own testnet key (a Hedera account, an EVM key for Base Sepolia, or a Solana keypair) on your machine. Your private key never leaves it.",
+    foot: <a href="/app?connect=claude#user">Connect your AI</a>,
   },
   {
-    who: "Claude, ChatGPT, VS Code, your code",
-    title: "Your own account, never ours",
-    text: "Connected AIs and the SDK sign with your own testnet key (a Hedera account, an EVM key for Base Sepolia, or a Solana keypair) on your machine, inside the budget you set. The demo wallet is only for this browser.",
-    foot: <a href="/app?connect=claude#user">Connect your AI</a>,
+    who: "Spending limits",
+    title: "Nothing above your limit is signed",
+    text: "Set the most you'll pay per call and per session. A quote above it is refused before anything is signed, and every payment you do make comes back with a receipt.",
+    foot: <code>BUYER_BUDGET=1 HBAR</code>,
   },
   {
     who: "Selling an API",
@@ -332,8 +332,8 @@ export function Wallets() {
     <section id="wallet" className="section wallets" data-stage="wallet">
       <div className="container">
         <Eyebrow>Wallets</Eyebrow>
-        <h2 className="reveal">Do I need to connect a wallet?</h2>
-        <p className="reveal muted wallets-lede">Not to try it. A wallet only matters once you pay from your own account or get paid for yours.</p>
+        <h2 className="reveal">Your wallet, your limits.</h2>
+        <p className="reveal muted wallets-lede">Buyers pay from their own account and only up to the limit they set. Sellers are paid straight to theirs.</p>
         <div className="wallet-cards">
           {WALLETS.map((w) => (
             <article key={w.who} className="wallet-card glass reveal">
@@ -363,7 +363,7 @@ export function Proof() {
             { k: "Solana devnet", v: "0.00048 USDC", s: "48 forecast hours", href: CHAIN_PANELS[2].proof.href },
             { k: "Base Sepolia", v: "0.0005 USDC", s: "10 DEX pools", href: CHAIN_PANELS[1].proof.href },
             { k: "Hedera testnet", v: "HCS receipts", s: "one per settled call", href: CHAIN_PANELS[0].proof.href },
-            { k: "Tests", v: "219 passing", s: "164 unit + 55 end-to-end", href: REPO },
+            { k: "Tests", v: "221 passing", s: "166 unit + 55 end-to-end", href: REPO },
           ].map((c) => (
             <a key={c.k} className="proof-card glass reveal" href={c.href} target="_blank" rel="noopener"><span>{c.k}</span><b>{c.v}</b><em>{c.s} ↗</em></a>
           ))}
@@ -394,7 +394,7 @@ export function FinalCta() {
     <section id="get-started" className="section final" data-stage="cta">
       <div className="container final-in">
         <h2 className="reveal">Stop paying for calls.<br /><span className="grad">Pay for what they return.</span></h2>
-        <p className="reveal">Explore live services, try one in your browser, or connect your agent. Testnet only: no wallet to connect, nothing to install.</p>
+        <p className="reveal">Explore live services, try one in your browser, or connect your agent. Testnets only, with test tokens.</p>
         <div className="cta-row center reveal">
           <a className="btn primary lg" href={APP}>Get started</a>
           <a className="btn ghost lg" href={REPO} target="_blank" rel="noopener">Read the code</a>

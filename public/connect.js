@@ -18,7 +18,7 @@
 
   const OWN_ACCOUNT = {
     title: "Use your own testnet account",
-    body: `<p>A connected AI pays from <b>your</b> account, never this site's demo wallet. Create a free Hedera testnet account at
+    body: `<p>A connected AI pays from <b>your</b> account. Create a free Hedera testnet account at
       <a href="https://portal.hedera.com" target="_blank" rel="noopener">portal.hedera.com</a> and copy its <b>Account ID</b> (0.0.…) and <b>private key</b>.</p>
       <p>Your key stays on your machine. <code>BUYER_BUDGET</code> caps the whole session and <code>BUYER_MAX_PER_CALL</code> caps one call: nothing above them is ever signed.
       Services on Base Sepolia or Solana devnet also need <code>BUYER_EVM_PRIVATE_KEY</code> or <code>BUYER_SOLANA_SECRET_KEY</code>.</p>`,
@@ -130,7 +130,7 @@
         <h2 id="modal-${id}-h">${esc(g.title)}</h2>
         <p class="label">${esc(g.sub)}</p>
         <div class="own-wallet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6Z"/><path d="m8.8 12 2.2 2.2 4.3-4.4"/></svg>
-          <span>Pays from <b>your own</b> testnet account, inside your budget. Never from this site's demo wallet.</span></div>
+          <span>Pays from <b>your own</b> testnet account, inside your budget. Your private key stays on your machine.</span></div>
         ${g.steps.map((s, i) => `
           <div class="llm-step">
             <div class="llm-step-num">${i + 1}</div>
