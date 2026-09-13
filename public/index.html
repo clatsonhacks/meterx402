@@ -10,7 +10,7 @@
 <meta property="og:description" content="Usage-based x402 payments for APIs and AI agents: metered per token, row or pool, settled on Hedera, Base or Solana, with live onchain data from The Graph and Uniswap.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#f9f9f7">
+<meta name="theme-color" content="#f5f4ee">
 <!-- Apply the stored theme before first paint: otherwise a dark-mode visitor
      gets a white flash while the stylesheet and scripts load. -->
 <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("mx402.theme");if(q==="system")localStorage.removeItem("mx402.theme");else if(q)localStorage.setItem("mx402.theme",q);if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
@@ -249,7 +249,7 @@
           <div class="hh-cta">
             <button class="primary big" id="hh-browse">Browse services</button>
             <button class="ghost big" id="hh-sell">Sell your API</button>
-            <button class="linky" id="hh-ask">Ask the DEX analyst →</button>
+            <button class="ai-pill" id="hh-ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.3a2 2 0 0 0 1.3 1.3L20.5 11.5l-5.3 1.9a2 2 0 0 0-1.3 1.3L12 20l-1.9-5.3a2 2 0 0 0-1.3-1.3L3.5 11.5l5.3-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>Ask the DEX analyst<span class="ai-arrow" aria-hidden="true">→</span></button>
           </div>
         </div>
         <div class="hh-demo card" id="hh-demo" aria-live="off" aria-label="A recent payment, replayed"></div>
@@ -296,7 +296,7 @@
           <div class="b-connect">
             <button class="ghost" id="bento-claude">Connect Claude</button>
             <button class="ghost" id="bento-chatgpt">Connect ChatGPT</button>
-            <button class="linky" id="bento-code">See the code</button>
+            <button class="ghost" id="bento-code">See the code</button>
           </div>
         </article>
         <article class="bento-card b-meter">

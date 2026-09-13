@@ -28,7 +28,7 @@
         <div class="hd-name"><b>${esc(titleFor(r.service_id))}</b><span>${r.example ? "how a call is paid" : esc(when(r.settled_at))} · ${esc(chainName(r.network))}</span></div>
         <span class="hd-live">${r.example ? "example" : `<i></i>real payment`}</span></div>
       <div class="hd-meter">
-        <div class="hd-count"><b id="hd-units">0</b> <span>${esc(r.unit)}</span></div>
+        <div class="hd-count"><b id="hd-units">0</b> <span>${esc(Number(r.metered_units) === 1 ? one(r.unit) : r.unit)}</span></div>
         <div class="hd-price"><b id="hd-amt">0</b> <span>${esc(r.currency)}</span></div>
       </div>
       <div class="hd-bar"><i id="hd-fill"></i></div>
