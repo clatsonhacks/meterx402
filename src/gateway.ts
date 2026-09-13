@@ -141,6 +141,15 @@ export async function startGateway(cfg: GatewayConfig): Promise<{ url: string; d
   try { await chain.load(); }
   catch { throw new Error(`chain "${chain.name}" needs an extra package (npm i @x402/evm or @x402/svm), or use --chain hedera`); }
 
+  // A brand-new Solana wallet has no USDC token account, and every payment to
+  // it would fail simulation. Say so now, with the fix, instead of at the first buyer.
+  if (network.startsWith("solana:") && !process.env.MX_OFFLINE) {
+    const { solanaUsdcAccount } = await import("./settlement/verify-chains.ts");
+    void solanaUsdcAccount(network, cfg.payTo).then((has) => {
+      if (has === false) console.warn(`⚠ ${cfg.payTo} has no USDC token account on ${chain.name} yet, so payments to it would fail.\n  Create one: npx mx402 wallet token-account --chain ${chain.name} --owner ${cfg.payTo}\n  (or receive any USDC to it once, e.g. from faucet.circle.com)`);
+    });
+  }
+
   // All money movement goes through a SettlementAdapter (src/settlement/): the
   // gateway never talks to a chain or a facilitator directly. Initialisation
   // (fetching the facilitator's fee payer) retries in the background; quotes

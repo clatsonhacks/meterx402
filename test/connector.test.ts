@@ -35,3 +35,18 @@ test("connector: spec is public, everything else needs the token", async () => {
     c.close();
   }
 });
+
+test("sellers are warned when a Solana payout wallet has no USDC token account", async () => {
+  const { solanaUsdcAccount } = await import("../src/settlement/verify-chains.ts");
+  const devnet = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+  const rpc = (value: unknown[]) => (async (_url: string, init: any) => {
+    const body = JSON.parse(init.body);
+    assert.equal(body.method, "getTokenAccountsByOwner");
+    assert.equal(body.params[1].mint, "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { value } }));
+  }) as typeof fetch;
+  assert.equal(await solanaUsdcAccount(devnet, "NewWallet111", { fetch: rpc([]) }), false);
+  assert.equal(await solanaUsdcAccount(devnet, "Funded111", { fetch: rpc([{ pubkey: "ata" }]) }), true);
+  const down = (async () => { throw new Error("offline"); }) as typeof fetch;
+  assert.equal(await solanaUsdcAccount(devnet, "Any", { fetch: down }), null);
+});

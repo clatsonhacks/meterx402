@@ -68,6 +68,60 @@ export async function verifyEvmTransfer(network: string, tx: string, payTo: stri
   return { verified: false, detail: `transaction ${tx} not found on ${network}` };
 }
 
+/** Does this Solana wallet have a USDC token account yet? An SPL transfer to a
+ *  brand-new wallet fails simulation (InvalidAccountData) until one exists, so
+ *  a seller should know before any buyer tries to pay. null = could not tell. */
+export async function solanaUsdcAccount(network: string, owner: string, opts: { rpcUrl?: string; fetch?: typeof fetch } = {}): Promise<boolean | null> {
+  const url = opts.rpcUrl ?? process.env.SOLANA_RPC_URL ?? SOLANA_RPC[network];
+  const mint = USDC[network];
+  if (!url || !mint) return null;
+  try {
+    const r = await rpc(url, "getTokenAccountsByOwner", [owner, { mint }, { encoding: "jsonParsed", commitment: "confirmed" }], opts.fetch);
+    return Array.isArray(r?.value) && r.value.length > 0;
+  } catch {
+    return null;
+  }
+}
+
+/** Create the wallet's USDC associated token account (idempotent), paid by
+ *  `payerSecret` (base58, 64 bytes), which needs a little SOL for rent and fees.
+ *  Loads @solana/kit and @solana-program/token only when called. */
+export async function createSolanaUsdcAccount(network: string, owner: string, payerSecret: string, opts: { rpcUrl?: string } = {}): Promise<{ created: boolean; signature?: string; tokenAccount: string }> {
+  const url = opts.rpcUrl ?? process.env.SOLANA_RPC_URL ?? SOLANA_RPC[network];
+  const mint = USDC[network];
+  if (!url || !mint) throw new Error(`no Solana RPC or USDC mint for ${network}`);
+  const kit = await import("@solana/kit");
+  const token = await import("@solana-program/token");
+  const [ata] = await token.findAssociatedTokenPda({ owner: kit.address(owner), mint: kit.address(mint), tokenProgram: token.TOKEN_PROGRAM_ADDRESS });
+  if (await solanaUsdcAccount(network, owner, opts)) return { created: false, tokenAccount: ata };
+
+  const payer = await kit.createKeyPairSignerFromBytes(kit.getBase58Encoder().encode(payerSecret));
+  const client = kit.createSolanaRpc(url);
+  const { value: lamports } = await client.getBalance(payer.address, { commitment: "confirmed" }).send();
+  if (lamports < 2_500_000n) {
+    throw new Error(`the fee payer ${payer.address} has ${Number(lamports) / 1e9} SOL; it needs about 0.003 SOL for the account's rent and fee (devnet: faucet.solana.com)`);
+  }
+  const ix = await token.getCreateAssociatedTokenIdempotentInstructionAsync({ payer, owner: kit.address(owner), mint: kit.address(mint) });
+  const { value: blockhash } = await client.getLatestBlockhash({ commitment: "confirmed" }).send();
+  const message = kit.pipe(
+    kit.createTransactionMessage({ version: 0 }),
+    (m) => kit.setTransactionMessageFeePayerSigner(payer, m),
+    (m) => kit.setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
+    (m) => kit.appendTransactionMessageInstruction(ix, m),
+  );
+  const signed = await kit.signTransactionMessageWithSigners(message);
+  const signature = kit.getSignatureFromTransaction(signed);
+  await client.sendTransaction(kit.getBase64EncodedWireTransaction(signed), { encoding: "base64", preflightCommitment: "confirmed" }).send();
+  for (let i = 0; i < 30; i++) {
+    const { value } = await client.getSignatureStatuses([signature]).send();
+    const s = value[0];
+    if (s?.err) throw new Error(`token account transaction failed: ${JSON.stringify(s.err)}`);
+    if (s?.confirmationStatus === "confirmed" || s?.confirmationStatus === "finalized") return { created: true, signature, tokenAccount: ata };
+    await sleep(1000);
+  }
+  throw new Error(`token account transaction ${signature} not confirmed yet`);
+}
+
 export async function verifySolanaTransfer(network: string, signature: string, payTo: string, opts: { rpcUrl?: string; fetch?: typeof fetch; tries?: number } = {}): Promise<Verification> {
   const url = opts.rpcUrl ?? process.env.SOLANA_RPC_URL ?? SOLANA_RPC[network];
   if (!url) return { verified: false, detail: `no RPC for ${network}: set SOLANA_RPC_URL` };

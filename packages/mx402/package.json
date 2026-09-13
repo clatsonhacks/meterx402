@@ -56,7 +56,8 @@
     "@x402/evm": "2.25.0",
     "@x402/svm": "2.25.0",
     "viem": "^2.56.3",
-    "@solana/kit": "^5.5.1"
+    "@solana/kit": "^5.5.1",
+    "@solana-program/token": "^0.9.0"
   },
   "scripts": {
     "prepublishOnly": "cd ../.. && node scripts/build-cli.mjs"

@@ -10,7 +10,7 @@ mkdirSync("packages/mx402/dist", { recursive: true });
 // The EVM and Solana signers are loaded only when a wallet on those chains is
 // used. They stay out of the bundle and ship as optionalDependencies, so a
 // Hedera-only `npx mx402` starts fast and Base/Solana work after a normal install.
-const CHAIN_LIBS = ["@x402/evm", "@x402/evm/*", "@x402/svm", "@x402/svm/*", "viem", "viem/*", "@solana/kit"];
+const CHAIN_LIBS = ["@x402/evm", "@x402/evm/*", "@x402/svm", "@x402/svm/*", "viem", "viem/*", "@solana/kit", "@solana-program/token"];
 
 const shared = {
   bundle: true,

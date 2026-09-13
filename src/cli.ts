@@ -53,6 +53,9 @@ ${bold("mx402")} — turn any API into an x402 API that charges for what each ca
       Create a Hedera testnet account (needs HEDERA_ACCOUNT_ID/HEDERA_PRIVATE_KEY
       in .env) and print it, to use as --wallet.
 
+  ${bold("mx402 wallet token-account")} --chain solana-devnet --owner <address>
+      Give a new Solana wallet its USDC token account so it can be paid (idempotent).
+
 Run ${bold("mx402 --help-all")} for every pricing, lane and tab flag.
 `;
 
@@ -171,7 +174,8 @@ async function check(argv: string[]): Promise<void> {
 // ── mx402 wallet new ──────────────────────────────────────────────────────
 
 async function wallet(argv: string[]): Promise<void> {
-  if (argv[0] !== "new") { console.error("usage: mx402 wallet new [--hbar 5]"); process.exit(1); }
+  if (argv[0] === "token-account") return tokenAccount(argv.slice(1));
+  if (argv[0] !== "new") { console.error("usage: mx402 wallet new [--hbar 5]\n       mx402 wallet token-account --chain solana-devnet --owner <address>"); process.exit(1); }
   const hbar = Number(argv[argv.indexOf("--hbar") + 1]) || 5;
   const { hederaEnabled, initHedera, lookupAccount } = await import("./hedera.ts");
   if (!hederaEnabled()) {
@@ -191,6 +195,31 @@ async function wallet(argv: string[]): Promise<void> {
   console.log(`  WALLET=${accountId}                 ${dim("# to be paid into")}`);
   console.log(`  BUYER_ACCOUNT_ID=${accountId}`);
   console.log(`  BUYER_PRIVATE_KEY=${key.toStringDer()}\n`);
+}
+
+/** Give a Solana wallet its USDC token account, so it can be paid. Idempotent. */
+async function tokenAccount(argv: string[]): Promise<void> {
+  const flag = (n: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : undefined; };
+  const { CHAINS } = await import("./chains.ts");
+  const chainName = flag("chain") ?? "solana-devnet";
+  const chain = CHAINS[chainName];
+  const owner = flag("owner");
+  if (!chain || !chain.network.startsWith("solana:") || !owner) {
+    console.error("usage: mx402 wallet token-account --chain solana-devnet|solana --owner <address>\n  pays rent and fees from SOLANA_FEE_PAYER_SECRET_KEY (or SELLER_SOLANA_SECRET_KEY / BUYER_SOLANA_SECRET_KEY)");
+    process.exit(1);
+  }
+  const payer = process.env.SOLANA_FEE_PAYER_SECRET_KEY ?? process.env.SELLER_SOLANA_SECRET_KEY ?? process.env.BUYER_SOLANA_SECRET_KEY;
+  if (!payer) { console.error(`${red("✖")} set SOLANA_FEE_PAYER_SECRET_KEY: a ${chain.name} keypair with a little SOL (about 0.003) to pay the account's rent`); process.exit(1); }
+  try {
+    const { createSolanaUsdcAccount } = await import("./settlement/verify-chains.ts");
+    const r = await createSolanaUsdcAccount(chain.network, owner, payer);
+    const cluster = chain.name === "solana-devnet" ? "?cluster=devnet" : "";
+    if (r.created) console.log(`${green("✓")} created the USDC token account ${bold(r.tokenAccount)} for ${owner}\n  https://solscan.io/tx/${r.signature}${cluster}`);
+    else console.log(`${green("✓")} ${owner} already has a USDC token account (${r.tokenAccount}): it can be paid`);
+  } catch (e) {
+    console.error(`${red("✖")} ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
 }
 
 // ── mx402 <url> --wallet … ────────────────────────────────────────────────

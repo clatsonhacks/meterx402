@@ -70,6 +70,8 @@ function receiptOf(r: CallResult) {
     network: r.receipt.network, transaction_id: r.receipt.transaction_id ?? null,
   } : null;
 }
+/** why a call did not go through, from the service or facilitator answer */
+const whyNot = (r: CallResult) => (r.ok ? undefined : String((r.data as any)?.detail ?? (r.data as any)?.error ?? (r.data as any)?.message ?? `HTTP ${r.status}`).slice(0, 500));
 const clip = (d: unknown) => (typeof d === "string" ? d.slice(0, 20_000) : d);
 
 function spec(baseUrl: string) {
@@ -219,7 +221,7 @@ export function startConnector(opts: ConnectorOptions = {}) {
         try {
           if (url.pathname === "/call") {
             const r = await buyer.call(String(b.service_id), toReq(b, b.max_price));
-            return send(res, 200, { ok: r.ok, paid: r.paid, status: r.status, data: clip(r.data), receipt: receiptOf(r), verification: r.verification, budget_remaining: buyer.remaining });
+            return send(res, 200, { ok: r.ok, paid: r.paid, status: r.status, data: clip(r.data), error: whyNot(r), receipt: receiptOf(r), verification: r.verification, budget_remaining: buyer.remaining });
           }
           const q = await buyer.quote(String(b.service_id), toReq(b));
           if (!("pay" in q)) return send(res, 200, { ok: q.ok, free: true, data: clip(q.data) });
@@ -236,7 +238,7 @@ export function startConnector(opts: ConnectorOptions = {}) {
         try {
           const r = await q.pay();
           pending.delete(String(b.quote_id));
-          return send(res, 200, { ok: r.ok, paid: r.paid, status: r.status, data: clip(r.data), receipt: receiptOf(r), verification: r.verification });
+          return send(res, 200, { ok: r.ok, paid: r.paid, status: r.status, data: clip(r.data), error: whyNot(r), receipt: receiptOf(r), verification: r.verification });
         } catch (e) { return failure(res, e); }
       }
       return send(res, 404, { ok: false, error: "not found" });
