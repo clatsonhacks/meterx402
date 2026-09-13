@@ -131,30 +131,24 @@ mirror-node verification of every payment.
 | Published package, end to end with brand-new wallets | `npx mx402` from an empty folder: new seller 0.0.10521862 received 13 payments (+0.0552 HBAR, mirror node) through publish, data, SDK, MCP and the connector; a new Base Sepolia address received 0.00048 USDC ([0x46e3c4b1…](https://sepolia.basescan.org/tx/0x46e3c4b1a96b9d65109798e46fb4b7e9026a13e029c65c5880a623f830d9587f)) |
 | Analyst run: plan, pools, quote, answer for 0.017 HBAR | Hedera txs `0.0.7162784@1789247964.071079545`, `…975.321851525`, `…977.589209659`, `…982.127388281` |
 
-## Demo video script (3:00)
+## Demo video script
 
-The story in one line: **a taxi meter for APIs.** Use case first, then real transactions, then
-connectors.
-
-1. **0:00–0:20, the use case.** A taxi charges for distance, not a flat price per ride; APIs charge
-   a five-word and a five-page answer the same. MeterX402 charges for what each call returns.
-   Landing page: the globe, the receipt card, the flat-versus-metered bars (289 tokens for 0.00289
-   HBAR against a flat 0.04).
-2. **0:20–0:40, four steps.** Meter, quote, pay inside your limit, receipt. Scroll "How a call is
-   paid" until the coin flips to PAID. Say "testnet" once.
-3. **0:40–1:20, a real payment.** /app → Weather → Try it: Today is 24 rows for 0.0024 HBAR, pay,
-   open the HashScan link; 2 days is 48 rows for 0.0048, exactly double. Set a 0.003 limit: a week
-   asks before paying.
-4. **1:20–1:50, an agent that pays for itself.** Playground → Ask the DEX analyst: plan, The Graph
-   pools and lending, Uniswap quote, answer. Four receipts, 0.012 HBAR, only numbers it paid for.
-5. **1:50–2:05, three chains.** The landing page's globe turns to Hedera, Base, Solana; BaseScan and
-   Solscan tabs for the USDC settlements in Proof.
-6. **2:05–2:22, sellers.** `npx mx402 check <url>` suggests the meter and the price; the Deployer
-   dashboard shows income.
-7. **2:22–2:52, connectors.** Explore → "Use it from your AI" → Connect Claude (your own account,
-   never ours). In Claude Desktop: quote first, approve, `pay_for_service`, the receipt in the
-   chat. Flash the ChatGPT and VS Code guides (`npx mx402 connector`).
-8. **2:52–3:00, close.** "Pay per use, not per call. `npx mx402`."
+1. **Catchy intro.** "An AI agent asks for five words. It pays for five pages. Taxis don't charge
+   you for the longest ride in town, so why do APIs? This is MeterX402, a meter for every API call."
+   Landing page: the globe and the receipt card counting up.
+2. **Deploy with npm.** `npx mx402 check` on Open-Meteo detects per-row pricing (24 rows, 48 rows,
+   flat at the cap). `npx mx402 publish … --wallet` starts the gateway and lists it; `curl -i`
+   shows `402 Payment Required` with `x-meter-amount`. `npx mx402 data cities.csv` sells a file
+   per cell, with free schema and count.
+3. **The web app and the technology.** Buy the weather just deployed: 24 rows for 0.0024 HBAR, the
+   HashScan link, 48 rows for exactly double, a limit that asks first. Then under the hood: meter,
+   hold, 402 committed to the body hash, x402 payment within budget, facilitator settlement checked
+   independently on Hedera, Base and Solana, buyer-side re-metering and disputes, reputation from
+   evidence. The Graph standardized DEX and lending subgraphs, any subgraph per entity, Uniswap quotes
+   and the swap builder, and the DEX analyst with four receipts.
+4. **Connect your AI.** "Use it from your AI": Claude Desktop with `npx mx402 mcp` quotes, asks,
+   pays from the user's own account and shows the receipt in chat; ChatGPT and VS Code through
+   `npx mx402 connector`. Close: "Pay per use, not per call. `npx mx402`."
 
 ## Links
 
